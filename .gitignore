@@ -1,0 +1,27 @@
+# Secrets
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+report.xml
+
+# Données générées
+data/processed/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Livrables générés
+*.zip
