@@ -9,7 +9,7 @@ COMPOSE      := docker compose
 COMPOSE_TEST := $(COMPOSE) -f compose.yaml -f compose.test.yaml
 
 .DEFAULT_GOAL := help
-.PHONY: help venv lint format test env db-up db-down db-reset db-shell db-logs
+.PHONY: help venv lint format test env db-up db-down db-reset db-shell db-logs test-persistence
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "} {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -57,3 +57,6 @@ db-shell: .env ## Ouvre un client MySQL dans le conteneur
 
 db-logs: ## Affiche les logs de la base
 	$(COMPOSE) logs -f db
+
+test-persistence: .env ## Test T7 : les données survivent à down/up
+	./scripts/test_persistance.sh
