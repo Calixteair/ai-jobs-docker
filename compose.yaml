@@ -1,0 +1,35 @@
+# Orchestration du projet. Lancement : cp .env.example .env && docker compose up --build
+name: ai-jobs
+
+services:
+  db:
+    build:
+      context: .
+      dockerfile: database/Dockerfile
+    image: ai-jobs-db:local
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Variable manquante, voir .env.example}
+      MYSQL_USER: ${MYSQL_USER:?Variable manquante, voir .env.example}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Variable manquante, voir .env.example}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Variable manquante, voir .env.example}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - backend
+    healthcheck:
+      # -h 127.0.0.1 force une connexion TCP : pendant l'initialisation, MySQL
+      # tourne sans réseau, donc le service n'est déclaré sain qu'une fois
+      # l'import terminé et le vrai serveur démarré.
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u $$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    # Aucun port publié : seule l'application, sur le réseau backend, y accède.
+
+volumes:
+  mysql_data:
+
+networks:
+  backend:

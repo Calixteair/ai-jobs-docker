@@ -1,0 +1,21 @@
+# Exclus du contexte de build Docker : accélère le build et évite d'embarquer
+# des fichiers inutiles ou sensibles dans les images.
+.git
+.github
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+.coverage
+htmlcov
+report.xml
+.env
+.env.*
+!.env.example
+data/processed
+docs
+rapport
+tests
+*.md

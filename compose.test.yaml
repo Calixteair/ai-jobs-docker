@@ -1,0 +1,7 @@
+# Surcharge réservée aux tests (local et CI) : publie MySQL sur 127.0.0.1
+# pour que pytest, lancé hors conteneur, puisse s'y connecter.
+# Usage : docker compose -f compose.yaml -f compose.test.yaml up -d --wait db
+services:
+  db:
+    ports:
+      - "127.0.0.1:${DB_TEST_PORT:-3307}:3306"
