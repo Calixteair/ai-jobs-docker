@@ -1,0 +1,8 @@
+# Outillage de développement et de test (pas installé dans les images Docker)
+pandas==2.2.3
+SQLAlchemy==2.0.36
+PyMySQL==1.1.1
+cryptography==44.0.0
+pytest==8.3.4
+pytest-cov==6.0.0
+ruff==0.8.4
