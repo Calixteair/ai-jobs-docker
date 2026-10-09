@@ -1,0 +1,9 @@
+[server]
+# Pas d'ouverture de navigateur ni d'invite interactive (conteneur, CI)
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
