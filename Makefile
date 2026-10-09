@@ -9,7 +9,7 @@ COMPOSE      := docker compose
 COMPOSE_TEST := $(COMPOSE) -f compose.yaml -f compose.test.yaml
 
 .DEFAULT_GOAL := help
-.PHONY: help venv lint format test env db-up db-down db-reset db-shell db-logs test-persistence run-app
+.PHONY: help venv lint format test env db-up db-down db-reset db-shell db-logs test-persistence run-app test-int
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "} {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -32,6 +32,9 @@ format: venv ## Formate le code (ruff)
 
 test: venv ## Lance les tests unitaires
 	$(VENV)/bin/pytest tests/unit --junitxml=report.xml
+
+test-int: venv db-up ## Lance les tests d'intégration contre MySQL (démarre la base)
+	$(VENV)/bin/pytest tests/integration -m integration --junitxml=report-integration.xml
 
 # --------------------------------------------------------------------------- #
 # Base de données
