@@ -17,3 +17,7 @@ pythonpath = ["scripts", "app"]
 markers = [
     "integration: tests nécessitant une base MySQL démarrée (make db-up)",
 ]
+
+[tool.ruff.lint.isort]
+# Modules du projet importés via pythonpath (scripts/, app/)
+known-first-party = ["cleaning", "explore", "db", "queries"]
