@@ -241,7 +241,18 @@ Offres où les années correspondent au libellé du niveau : **401** (26.7%).
 | Senior ($200-300k) | 201000.0 | 300000.0 |
 | Upper-Mid ($150-200k) | 151000.0 | 200000.0 |
 
-### 6.4 Répartition temporelle
+### 6.4 Pays « Global »
+
+- Offres avec `country = Global` : **82**, villes : Remote
+- Mode de travail de ces offres :
+
+| remote_work | offres |
+|---|---|
+| Hybrid | 42 |
+| Fully Remote | 22 |
+| On-site | 18 |
+
+### 6.5 Répartition temporelle
 
 Part des offres publiées en 2026 : **58.4 %** (3 mois sur 15 couverts).
 

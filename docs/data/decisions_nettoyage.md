@@ -13,6 +13,7 @@ Chaque décision s'appuie sur un constat chiffré de [`profil_dataset.md`](profi
 | D7 | `experience_level` est un libellé texte, ordre non alphabétique | Ajouter `experience_rank` (1 = Entry … 4 = Lead) | Permet de trier les graphiques dans l'ordre logique |
 | D8 | Aucun manquant, aucun doublon d'identifiant, aucun espace parasite, aucune variante de casse | **Garde-fous** : le script échoue si l'une de ces anomalies apparaît, ainsi que si une valeur catégorielle sort des domaines connus | Le nettoyage reste fiable si le dataset est remplacé par une nouvelle version |
 | D9 | `required_skills` est une liste dans une seule colonne | **Normaliser** en deux tables : `skills` (93 compétences) et `job_skills` (liaison) ; la colonne est retirée de `jobs` | Relation plusieurs-à-plusieurs, cf. choix MySQL |
+| D10 | 82 offres ont `country = Global` et `city = Remote`, dont 18 marquées `On-site` | **Conserver** « Global » comme catégorie distincte (pas un pays), sans corriger `remote_work` | Une offre « Global / Remote » sur site est contradictoire mais on ne peut pas déduire la bonne valeur. Les graphiques par pays afficheront « Global » à part ; l'incohérence est citée dans le rapport |
 
 ## Limites à mentionner dans le rapport
 

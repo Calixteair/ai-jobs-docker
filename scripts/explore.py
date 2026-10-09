@@ -136,6 +136,14 @@ def section_consistency(df: pd.DataFrame) -> str:
     remote_ok = (df["is_remote_friendly"] == (df["remote_work"] != "On-site")).all()
     tier_bounds = df.groupby("salary_tier")["annual_salary_usd"].agg(["min", "max"]).reset_index()
 
+    global_rows = df[df["country"] == "Global"]
+    global_modes = (
+        global_rows["remote_work"]
+        .value_counts()
+        .rename_axis("remote_work")
+        .reset_index(name="offres")
+    )
+
     period = df["posting_year"].astype(str) + "-" + df["posting_month"].astype(str).str.zfill(2)
     by_period = period.value_counts().sort_index().rename_axis("période").reset_index(name="offres")
     share_2026 = (df["posting_year"] == 2026).mean() * 100
@@ -162,7 +170,12 @@ def section_consistency(df: pd.DataFrame) -> str:
         f"**{'cohérent' if remote_ok else 'incohérent'}**\n"
         "- Bornes réelles de `annual_salary_usd` par `salary_tier` :\n\n"
         f"{md_table(tier_bounds)}\n\n"
-        "### 6.4 Répartition temporelle\n\n"
+        "### 6.4 Pays « Global »\n\n"
+        f"- Offres avec `country = Global` : **{len(global_rows)}**, villes : "
+        f"{', '.join(sorted(global_rows['city'].unique()))}\n"
+        "- Mode de travail de ces offres :\n\n"
+        f"{md_table(global_modes)}\n\n"
+        "### 6.5 Répartition temporelle\n\n"
         f"Part des offres publiées en 2026 : **{share_2026:.1f} %** "
         "(3 mois sur 15 couverts).\n\n"
         f"{md_table(by_period)}\n"
