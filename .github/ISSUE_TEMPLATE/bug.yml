@@ -1,0 +1,33 @@
+name: Bug
+description: Comportement inattendu
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Ce qui se passe et ce qui était attendu.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Étapes pour reproduire
+      value: |
+        1.
+        2.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / captures
+      description: Sortie de `docker compose logs`, message d'erreur… (sans mot de passe)
+      render: text
+  - type: dropdown
+    id: env
+    attributes:
+      label: Environnement
+      options: [local, CI, staging, production]
+    validations:
+      required: true
