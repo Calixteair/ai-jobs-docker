@@ -128,8 +128,8 @@ Navigateur ──► :8501 ┌──────────────┐  ré
 | **staging** | `dev` | push sur `dev` (automatique) | `ai-jobs-staging.calixteair.fr` | protégé (access list NPM) |
 | **prod** | `main` | push sur `main` + **approbation manuelle** | `ai-jobs.calixteair.fr` | public |
 
-Sur le VPS : deux projets Compose isolés (`ai-jobs-staging`, `ai-jobs-prod`), chacun avec **son propre `.env`, son volume et son réseau**. Exposition via Nginx Proxy Manager (**WebSockets activés**, requis par Streamlit).
-Fichier dédié `compose.prod.yaml` qui remplace `build:` par `image: ghcr.io/<owner>/ai-jobs-docker:<tag>` — le `compose.yaml` du correcteur reste inchangé.
+Sur le VPS : deux stacks Compose isolées (`projects/ai-jobs-staging`, `projects/ai-jobs-prod`), chacune avec **ses secrets OpenBao, son volume et son réseau**. Exposition via Nginx Proxy Manager (**WebSockets activés**, requis par Streamlit).
+Deux images GHCR (`ai-jobs-docker-app`, `ai-jobs-docker-db` qui embarque les scripts d'init) ; le fichier `deploy/compose.vps.yaml` les référence par tag — le `compose.yaml` du correcteur reste inchangé. Détails : [`VPS_SETUP.md`](VPS_SETUP.md).
 
 ## 6. Stratégie Git
 
@@ -158,11 +158,11 @@ Conventions :
 | Workflow | Déclencheur | Étapes |
 |---|---|---|
 | `ci.yml` | PR + push sur toutes branches | `ruff check` → `pytest` (unit) → `docker compose build` → `compose up --wait` → tests intégration + smoke T1–T7 → `down -v` |
-| `deploy.yml` | push sur `dev` / `main` | build + push image GHCR (`:sha`, `:dev` ou `:prod`) → SSH VPS → `docker compose pull && up -d` → smoke test URL publique |
+| `deploy.yml` | push sur `dev` / `main` | build + push images GHCR (`:sha-…`, `:staging` ou `:prod`) → SSH VPS → `bao-deploy.sh` (`pull && up -d`) → smoke test URL publique |
 
 - **GitHub Environments** `staging` et `production` : secrets séparés (clé SSH de déploiement, hôte), `production` avec *required reviewer*.
-- Sur le VPS : utilisateur `deploy` dédié (groupe docker, aucun sudo), clé SSH réservée au déploiement.
-- Les secrets MySQL ne transitent **jamais** par la CI : `.env` présent uniquement sur le VPS.
+- Sur le VPS : pattern existant `ci-deployers` — un utilisateur `ci-ai-jobs-<env>` par environnement, clé SSH à commande forcée qui ne peut redéployer que sa propre stack.
+- Les secrets MySQL ne transitent **jamais** par la CI : stockés dans OpenBao, rendus en tmpfs par `bao-agent` sur le VPS.
 - Toutes les commandes passent par un **`Makefile`** (`make lint`, `make test`, `make smoke`) → portable vers Jenkins si l'école en fournit un (`pytest --junitxml`).
 
 ## 8. Stratégie de tests
@@ -254,7 +254,7 @@ Chacun teste son périmètre et rédige les sections correspondantes du rapport.
 ## 12. Décisions ouvertes
 
 - [ ] Attribution des rôles
-- [ ] Nom du repo GitHub et propriétaire (compte perso ou organisation)
+- [x] Nom du repo GitHub et propriétaire → `Calixteair/ai-jobs-docker`, public
 - [ ] Sous-domaines staging/prod définitifs
 - [ ] Kind ou Minikube pour le bonus
 - [ ] Jenkins école disponible ? (Docker sur agents, accès sortant, webhook)
