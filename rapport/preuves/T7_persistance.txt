@@ -1,0 +1,9 @@
+# Test T7 — persistance (2026-10-09 13:46)
+$ make test-persistence
+[T7] Démarrage de la base
+[T7] Écriture du marqueur t7-1791546403-16101
+[T7] docker compose down (conteneurs supprimés, volume conservé)
+[T7] docker compose up
+[T7] Conteneur avant : 2f9572d7b83b / après : b39df59d006e
+[T7] Marqueur retrouvé : 1
+[T7] OK : nouveau conteneur, données conservées dans le volume
