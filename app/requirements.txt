@@ -1,0 +1,8 @@
+# Dépendances de l'application Streamlit (installées dans l'image Docker)
+streamlit==1.40.2
+pandas==2.2.3
+SQLAlchemy==2.0.36
+# Connecteur MySQL en pur Python (aucune bibliothèque C à compiler)
+PyMySQL==1.1.1
+# Requis par PyMySQL pour l'authentification caching_sha2_password de MySQL 8
+cryptography==44.0.0
