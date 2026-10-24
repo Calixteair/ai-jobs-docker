@@ -4,6 +4,7 @@ Vérifient le conteneur démarré par `make db-up`, sans dépendre du schéma
 métier : les tests des données (zone data) viendront s'ajouter dans ce dossier.
 """
 
+import os
 import socket
 import subprocess
 
@@ -12,7 +13,9 @@ import pytest
 pytestmark = pytest.mark.integration
 
 COMPOSE = ["docker", "compose", "-f", "compose.yaml", "-f", "compose.test.yaml"]
-TEST_PORT = 3307
+# Surchargés en CI Jenkins, où MySQL tourne dans le démon Docker « docker »
+TEST_HOST = os.environ.get("DB_TEST_HOST", "127.0.0.1")
+TEST_PORT = int(os.environ.get("DB_TEST_PORT", "3307"))
 
 
 def in_container(*command: str) -> str:
@@ -23,8 +26,16 @@ def in_container(*command: str) -> str:
 
 
 def mysql(sql: str) -> str:
-    """Exécute une requête dans le conteneur avec l'utilisateur applicatif."""
-    command = 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -N -e "$0" 2>/dev/null'
+    """Exécute une requête dans le conteneur avec l'utilisateur applicatif.
+
+    Connexion TCP (-h 127.0.0.1), comme le healthcheck : l'emplacement du socket
+    Unix dépend de l'environnement (sous Docker-in-Docker, mysqld ne l'ouvre pas
+    à l'endroit attendu par le client).
+    """
+    command = (
+        'mysql -h 127.0.0.1 -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"'
+        ' -N -e "$0" 2>/dev/null'
+    )
     return in_container("sh", "-c", command, sql)
 
 
@@ -38,8 +49,8 @@ def test_service_is_healthy():
     assert status == "healthy"
 
 
-def test_test_port_is_published_on_localhost():
-    with socket.create_connection(("127.0.0.1", TEST_PORT), timeout=5):
+def test_test_port_is_published():
+    with socket.create_connection((TEST_HOST, TEST_PORT), timeout=5):
         pass
 
 
