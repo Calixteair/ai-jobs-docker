@@ -10,9 +10,10 @@ set -euo pipefail
 
 COMPOSE=(docker compose -f compose.yaml -f compose.test.yaml)
 
+# Connexion TCP (-h 127.0.0.1) : voir tests/integration/test_infra_db.py
 sql() {
   "${COMPOSE[@]}" exec -T db sh -c \
-    'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" -N -e "$0"' "$1" 2>/dev/null
+    'mysql -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE" -N -e "$0"' "$1" 2>/dev/null
 }
 
 marker="t7-$(date +%s)-$RANDOM"
