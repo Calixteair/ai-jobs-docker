@@ -9,7 +9,7 @@ COMPOSE      := docker compose
 COMPOSE_TEST := $(COMPOSE) -f compose.yaml -f compose.test.yaml
 
 .DEFAULT_GOAL := help
-.PHONY: help venv hooks lint format test env up down ps logs db-up db-down db-reset db-shell db-logs test-persistence test-int
+.PHONY: help venv hooks lint format test env up down ps logs smoke db-up db-down db-reset db-shell db-logs test-persistence test-int
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "} {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -60,6 +60,9 @@ ps: ## État des conteneurs
 
 logs: ## Logs de la stack
 	$(COMPOSE) logs -f
+
+smoke: .env ## Tests T1 à T5 sur la stack complète (build, démarrage, état, web, base), puis down -v
+	./scripts/smoke.sh
 
 db-up: .env ## Construit et démarre MySQL (port 127.0.0.1:3307 pour les tests)
 	$(COMPOSE_TEST) up -d --build --wait db
