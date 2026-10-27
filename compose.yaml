@@ -2,6 +2,27 @@
 name: ai-jobs
 
 services:
+  app:
+    build: .
+    image: ai-jobs-app:local
+    environment:
+      # "db" = nom du service : résolu par le DNS interne du réseau backend, jamais d'IP
+      DB_HOST: ${DB_HOST:-db}
+      DB_PORT: ${DB_PORT:-3306}
+      DB_NAME: ${MYSQL_DATABASE:?Variable manquante, voir .env.example}
+      DB_USER: ${MYSQL_USER:?Variable manquante, voir .env.example}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Variable manquante, voir .env.example}
+    ports:
+      # Seul port publié de la stack
+      - "${APP_PORT:-8501}:8501"
+    networks:
+      - backend
+    depends_on:
+      db:
+        # Attend que MySQL ait fini son initialisation (healthcheck), pas seulement son démarrage
+        condition: service_healthy
+    restart: unless-stopped
+
   db:
     build:
       context: .
