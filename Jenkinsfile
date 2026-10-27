@@ -21,6 +21,9 @@ pipeline {
   environment {
     DB_TEST_BIND = '0.0.0.0'
     DB_TEST_HOST = 'docker'
+    // Les 2 exécuteurs partagent le même démon dind : un nom de projet Compose par
+    // exécuteur évite que deux builds simultanés se disputent conteneurs et volumes.
+    COMPOSE_PROJECT_NAME = "ai-jobs-ci-${env.EXECUTOR_NUMBER}"
     REGISTRY = 'ghcr.io/calixteair'
   }
 
