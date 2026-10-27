@@ -7,12 +7,12 @@
 ## 1. Vue d'ensemble
 
 ```
-GitHub Actions                                   VPS calixteair.fr (SSH :5485)
-──────────────                                   ─────────────────────────────
+Jenkins (jenkins.calixteair.fr)                  VPS calixteair.fr (SSH :5485)
+───────────────────────────────                  ─────────────────────────────
 push dev  ─► build ─► ghcr.io/…:staging ─┐
                                          ├─ ssh ci-ai-jobs-staging ─► sudo ci-deploy-self.sh
 push main ─► build ─► ghcr.io/…:prod  ───┤                              └► bao-deploy.sh ai-jobs-staging
-  (approbation manuelle)                 └─ ssh ci-ai-jobs-prod ─────► sudo ci-deploy-self.sh
+  (approbation Jenkins)                  └─ ssh ci-ai-jobs-prod ─────► sudo ci-deploy-self.sh
                                                                         └► bao-deploy.sh ai-jobs-prod
 
 bao-deploy.sh <stack> :
@@ -31,7 +31,8 @@ Navigateur ─► NPM (:443, réseau nginx-reverse-proxy) ─► ai-jobs-<env>-a
 | Tag d'image | `:staging` (+ `:sha-<court>`) | `:prod` (+ `:vX.Y.Z`, `:sha-<court>`) |
 | Secrets OpenBao | `secret/ai-jobs/staging/mysql` | `secret/ai-jobs/prod/mysql` |
 | URL | `ai-jobs-staging.calixteair.fr` (basic auth) | `ai-jobs.calixteair.fr` |
-| GitHub Environment | `staging` | `production` (required reviewer) |
+| Approbation | automatique | étape `input` Jenkins, groupe `jenkins-admins` seul |
+| Identifiant SSH Jenkins | `ci-ai-jobs-staging` | `ci-ai-jobs-prod` |
 
 Isolation : chaque environnement a ses propres conteneurs, réseau interne, volume MySQL, secrets, clé SSH et utilisateur CI. Une clé CI compromise ne peut redéployer **que** son environnement (le wrapper déduit la stack de `$SUDO_USER`).
 
@@ -117,7 +118,7 @@ Suivre la procédure standard du wiki (`lab-openbao`, `vps-chantier-bao-migratio
 Clé générée **en local**, jamais sur le VPS ; une clé par environnement :
 
 ```bash
-ssh-keygen -t ed25519 -N '' -C "ci-ai-jobs-$ENV@github-actions" -f ./ci-ai-jobs-$ENV
+ssh-keygen -t ed25519 -N '' -C "ci-ai-jobs-$ENV@jenkins" -f ./ci-ai-jobs-$ENV
 ```
 
 Sur le VPS :
@@ -126,7 +127,7 @@ Sur le VPS :
 sudo useradd -m -s /bin/bash -g ci-deployers ci-ai-jobs-$ENV      # /bin/bash obligatoire (gotcha nologin)
 sudo install -d -o ci-ai-jobs-$ENV -g ci-deployers -m 0700 /home/ci-ai-jobs-$ENV/.ssh
 # authorized_keys (0600), une seule ligne :
-# command="sudo /usr/local/sbin/ci-deploy-self.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA… ci-ai-jobs-$ENV@github-actions
+# command="sudo /usr/local/sbin/ci-deploy-self.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA… ci-ai-jobs-$ENV@jenkins
 ```
 
 - Pas d'ajout au groupe `docker` (inutile : tout passe par le wrapper sudo).
@@ -150,88 +151,36 @@ Admin via tunnel : `ssh -L 81:127.0.0.1:81 vps-claude` → `http://localhost:81`
 - [ ] SSL Let's Encrypt, Force SSL, HTTP/2
 - [ ] Staging uniquement : Access List (basic auth, un compte pour le groupe)
 
-### 4.7 Côté GitHub
+### 4.7 Côté Jenkins et GitHub
 
-- [ ] Packages GHCR `ai-jobs-docker-app` et `ai-jobs-docker-db` en visibilité publique (après le premier push).
-- [ ] Environment **`staging`** : branche autorisée `dev`.
-- [ ] Environment **`production`** : branche autorisée `main`, *Required reviewers* = toi.
-- [ ] Secrets par environment :
+Les identifiants sont déclarés par JCasC dans le dépôt `jenkins-stack` (`casc/base.yaml`, README « Identifiants de livraison ») et leurs valeurs vivent dans OpenBao `secret/jenkins/prod/ai-jobs` :
 
-| Secret | staging | production |
-|---|---|---|
-| `DEPLOY_HOST` | `calixteair.fr` | `calixteair.fr` |
-| `DEPLOY_PORT` | `5485` | `5485` |
-| `DEPLOY_USER` | `ci-ai-jobs-staging` | `ci-ai-jobs-prod` |
-| `DEPLOY_SSH_KEY` | clé privée staging | clé privée prod |
-| `DEPLOY_KNOWN_HOSTS` | sortie de `ssh-keyscan -p 5485 calixteair.fr` | idem |
-| `SMOKE_BASIC_AUTH` | `user:pass` de l'access list NPM | — |
-| *variable* `APP_URL` | `https://ai-jobs-staging.calixteair.fr` | `https://ai-jobs.calixteair.fr` |
+| Identifiant Jenkins | Contenu |
+|---|---|
+| `ghcr-push` | jeton GitHub classique **dédié**, scope `write:packages` seul |
+| `ci-ai-jobs-staging` / `ci-ai-jobs-prod` | clé privée de l'utilisateur CI de l'environnement (§4.4) |
+| `ai-jobs-staging-access` | compte de l'access list NPM du staging (contrôle de l'URL) |
+| `vps-known-hosts` | clé d'hôte du VPS épinglée (pas de `StrictHostKeyChecking=no`) |
 
-`DEPLOY_KNOWN_HOSTS` évite `StrictHostKeyChecking=no`.
+- [ ] Après le premier push : packages GHCR `ai-jobs-docker-app` et `ai-jobs-docker-db` en visibilité **publique** (le VPS les tire sans `docker login`).
 
-## 5. Workflow de déploiement (esquisse)
+## 5. Pipeline de livraison
 
-```yaml
-# .github/workflows/deploy.yml
-on:
-  push:
-    branches: [dev, main]
+Étapes du `Jenkinsfile`, après les tests (lint, unitaires, intégration, smoke T1–T5, gitleaks) :
 
-permissions:
-  contents: read
-  packages: write
+| Branche | Étapes |
+|---|---|
+| PR, autres branches | tests seulement |
+| `dev` | build des images → push `:sha-<commit>` → tag et push `:staging` → `deploy/deploy.sh staging` |
+| `main` | build → push `:sha-<commit>` → **approbation** (`input`, `jenkins-admins`, 30 min) → `:prod` → `deploy/deploy.sh prod` |
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.t.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: t
-        run: echo "tag=${{ github.ref_name == 'main' && 'prod' || 'staging' }}" >> "$GITHUB_OUTPUT"
-      - uses: docker/login-action@v3
-        with: { registry: ghcr.io, username: ${{ github.actor }}, password: ${{ secrets.GITHUB_TOKEN }} }
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: app/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/calixteair/ai-jobs-docker-app:${{ steps.t.outputs.tag }}
-            ghcr.io/calixteair/ai-jobs-docker-app:sha-${{ github.sha }}
-      # idem pour l'image db (database/Dockerfile)
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
-    concurrency: deploy-${{ github.ref_name }}
-    steps:
-      - name: Déclencher le déploiement
-        run: |
-          install -m 700 -d ~/.ssh
-          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
-          ssh -p "${{ secrets.DEPLOY_PORT }}" "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}"
-      - name: Smoke test
-        env:
-          URL: ${{ vars.APP_URL }}                     # variable d'environment GitHub
-          SMOKE_AUTH: ${{ secrets.SMOKE_BASIC_AUTH }}  # staging uniquement (user:pass de l'access list)
-        run: |
-          for i in $(seq 1 30); do
-            curl -fsS ${SMOKE_AUTH:+-u "$SMOKE_AUTH"} "$URL/_stcore/health" && exit 0
-            sleep 5
-          done
-          exit 1
-```
-
-La commande SSH n'envoie rien : le `command=` forcé décide de ce qui s'exécute.
+`deploy/deploy.sh` ouvre la connexion SSH avec la clé de l'environnement (la commande forcée côté VPS fait `pull` + `up -d`), puis attend que `<URL>/_stcore/health` réponde 200.
 
 ## 6. Checklist de validation
 
 - [ ] Push sur `dev` → image `:staging` publiée → staging redéployé → smoke test vert
-- [ ] Merge `dev` → `main` → job en attente d'approbation → approuvé → prod redéployée
+- [ ] Merge `dev` → `main` → build en attente d'approbation dans Jenkins → approuvé par un `jenkins-admins` → prod redéployée
+- [ ] Un membre `ai-jobs-devs` ne peut pas approuver le déploiement de prod
 - [ ] `ssh` avec la clé staging ne peut pas déployer la prod (stack déduite du user)
 - [ ] `docker compose -p ai-jobs-prod restart` → données toujours présentes
 - [ ] Aucun port MySQL exposé : `ss -tlnp | grep 3306` vide côté hôte

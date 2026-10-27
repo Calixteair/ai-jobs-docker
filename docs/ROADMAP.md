@@ -73,7 +73,7 @@ Objectif : MVP fonctionnel de bout en bout, déployé en staging.
 | `compose.yaml` complet : réseau, `depends_on`, restart, variables | Phase 6 | devops | DevOps |
 | CI : build images + `compose up --wait` + smoke T1–T5 | Phase 8 | ci | DevOps |
 | VPS : utilisateur `deploy`, projet staging, `.env`, NPM (WebSockets + access list) | — | devops | DevOps |
-| `deploy.yml` : GHCR + déploiement staging sur push `dev` | — | ci | DevOps |
+| CD Jenkins : GHCR + déploiement staging sur push `dev` | — | ci | DevOps |
 | **Rapport** : sections 3 (Architecture), 4 (Choix base), 7 (Dockerfile) | — | docs | Data + DevOps |
 
 ## Sprint 3 — Qualité, analyses & bonus (11/11 → 24/11)
