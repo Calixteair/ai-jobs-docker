@@ -157,6 +157,57 @@ def test_real_dataset_skills_match_issue_10():
     assert explore.list_sizes(skills)["total"].tolist() == [9548, 9428]
 
 
+# --------------------------------------------------------------------------- #
+# Cohérence métier (issue #11)
+# --------------------------------------------------------------------------- #
+
+
+def test_salary_range_stats_detect_salaries_outside_the_range(sample):
+    sample["salary_min_usd"], sample["salary_max_usd"] = 100_000, 200_000
+    sample["annual_salary_usd"] = [90_000, 150_000, 240_000, 240_000, 210_000]
+
+    stats = explore.salary_range_stats(sample)
+
+    assert (stats["above"], stats["below"]) == (3, 1)
+    assert (stats["max_ratio"], stats["at_max_ratio"]) == (1.2, 2)
+
+
+def test_experience_consistency_counts_years_matching_the_level(sample):
+    sample["experience_level"] = ["Entry (0-2 yrs)"] * 3 + ["Lead (10+ yrs)"] * 2
+    sample["years_of_experience"] = [1, 2, 7, 12, 3]
+
+    table, coherent = explore.experience_consistency(sample)
+
+    assert coherent == 3  # 1 et 2 ans en Entry, 12 ans en Lead
+    assert table.set_index("experience_level").loc["Entry (0-2 yrs)", "6-9"] == 1
+
+
+def test_derived_checks_detect_an_inconsistent_column(sample):
+    assert all(explore.derived_checks(sample).values())
+
+    sample.loc[0, "is_remote_friendly"] = 1 - sample.loc[0, "is_remote_friendly"]
+    sample.loc[1, "salary_tier"] = (
+        "Elite (>$300k)" if sample.loc[1, "annual_salary_usd"] <= 300_000 else "Entry (<$100k)"
+    )
+    checks = explore.derived_checks(sample)
+
+    assert not checks["is_remote_friendly"]
+    assert not checks["salary_tier"]
+    assert checks["is_senior"]
+
+
+def test_real_dataset_matches_issue_11():
+    """Critères d'acceptation de #11 : 288 salaires hors fourchette, colonnes dérivées OK."""
+    df, _ = explore.load(explore.DEFAULT_CSV)
+
+    assert explore.salary_range_stats(df)["above"] == 288
+    assert explore.experience_consistency(df)[1] == 401
+    assert all(explore.derived_checks(df).values())
+    years = explore.time_distribution(df).set_index("année")
+    assert years.loc[2026, "% des offres"] == 58.4
+    assert explore.global_offers(df)["count"] == 82
+
+
 def test_report_is_reproducible():
     assert explore.build_report(explore.DEFAULT_CSV) == explore.build_report(explore.DEFAULT_CSV)
 
