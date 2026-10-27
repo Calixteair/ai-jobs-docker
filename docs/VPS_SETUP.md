@@ -90,58 +90,16 @@ Les scripts d'init MySQL ne s'exécutent que si le volume est vide. Si le schém
 ```bash
 STACK=ai-jobs-$ENV
 sudo install -d -o calixteair -g calixteair -m 0755 /home/calixteair/docker/projects/$STACK
-sudo install -o calixteair -g calixteair -m 0644 /tmp/compose.$ENV.yaml /home/calixteair/docker/projects/$STACK/compose.yaml
-sudo -u calixteair ln -s /home/calixteair/docker/projects/$STACK /home/calixteair/dockge-stacks/$STACK   # visibilité Dockge
+sudo install -o calixteair -g calixteair -m 0640 /tmp/compose.$ENV.yaml /home/calixteair/docker/projects/$STACK/compose.yaml
 ```
 
-Contenu attendu de `compose.yaml` (versionné dans le repo sous `deploy/compose.vps.yaml`, tag substitué) :
+Le fichier est généré depuis le gabarit versionné [`deploy/compose.vps.yaml`](../deploy/compose.vps.yaml) :
 
-```yaml
-name: ai-jobs-staging            # ai-jobs-prod pour la prod
-
-services:
-  db:
-    image: ghcr.io/calixteair/ai-jobs-docker-db:staging
-    container_name: ai-jobs-staging-db
-    environment:
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-    volumes:
-      - mysql_data:/var/lib/mysql
-    networks: [internal]
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$${MYSQL_ROOT_PASSWORD} --silent"]
-      interval: 10s
-      retries: 10
-    mem_limit: 512m
-    restart: unless-stopped
-
-  app:
-    image: ghcr.io/calixteair/ai-jobs-docker-app:staging
-    container_name: ai-jobs-staging-app
-    environment:
-      DB_HOST: db
-      DB_PORT: 3306
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    depends_on:
-      db: { condition: service_healthy }
-    networks: [internal, nginx-reverse-proxy]
-    mem_limit: 512m
-    restart: unless-stopped
-    # aucun port publié : accès uniquement via NPM
-
-volumes:
-  mysql_data:
-
-networks:
-  internal:
-  nginx-reverse-proxy:
-    external: true
+```bash
+deploy/render.sh $ENV > /tmp/compose.$ENV.yaml     # sur le poste, puis scp vers le VPS
 ```
+
+Il référence les images `ghcr.io/calixteair/ai-jobs-docker-{app,db}:$ENV`, sans `build:` ni port publié : `db` sur le réseau interne, `app` sur le réseau interne et `nginx-reverse-proxy`, `mem_limit: 512m` chacun.
 
 ### 4.3 Secrets OpenBao
 
