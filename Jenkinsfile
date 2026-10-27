@@ -96,8 +96,11 @@ pipeline {
             SHA=sha-$(git rev-parse --short=12 HEAD)
             docker build -t "$REGISTRY/ai-jobs-docker-app:$SHA" .
             docker build -t "$REGISTRY/ai-jobs-docker-db:$SHA" -f database/Dockerfile .
-            docker push "$REGISTRY/ai-jobs-docker-app:$SHA"
-            docker push "$REGISTRY/ai-jobs-docker-db:$SHA"
+            # GHCR refuse parfois la première écriture d'un package (création + liaison au dépôt) :
+            # une nouvelle tentative suffit.
+            push() { for i in 1 2 3; do docker push "$1" && return 0; sleep 5; done; return 1; }
+            push "$REGISTRY/ai-jobs-docker-app:$SHA"
+            push "$REGISTRY/ai-jobs-docker-db:$SHA"
           '''
         }
       }
@@ -135,9 +138,10 @@ def deployTo(String envName, String url) {
       trap 'rm -rf "\$DOCKER_CONFIG"' EXIT
       echo "\$GHCR_TOKEN" | docker login ghcr.io -u "\$GHCR_USER" --password-stdin
       SHA=sha-\$(git rev-parse --short=12 HEAD)
+      push() { for i in 1 2 3; do docker push "\$1" && return 0; sleep 5; done; return 1; }
       for image in ai-jobs-docker-app ai-jobs-docker-db; do
         docker tag "\$REGISTRY/\$image:\$SHA" "\$REGISTRY/\$image:${envName}"
-        docker push "\$REGISTRY/\$image:${envName}"
+        push "\$REGISTRY/\$image:${envName}"
       done
     """
   }
