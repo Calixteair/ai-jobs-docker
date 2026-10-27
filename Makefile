@@ -9,7 +9,7 @@ COMPOSE      := docker compose
 COMPOSE_TEST := $(COMPOSE) -f compose.yaml -f compose.test.yaml
 
 .DEFAULT_GOAL := help
-.PHONY: help venv hooks lint format test env db-up db-down db-reset db-shell db-logs test-persistence test-int
+.PHONY: help venv hooks lint format test env up down ps logs db-up db-down db-reset db-shell db-logs test-persistence test-int
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "} {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -48,6 +48,18 @@ test-int: venv db-up ## Lance les tests d'intégration contre MySQL (démarre la
 	@echo ".env créé depuis .env.example (valeurs factices)"
 
 env: .env ## Crée .env depuis .env.example s'il n'existe pas
+
+up: .env ## Construit et démarre toute la stack (app sur http://localhost:8501)
+	$(COMPOSE) up -d --build --wait
+
+down: ## Arrête la stack (les données sont conservées)
+	$(COMPOSE) down
+
+ps: ## État des conteneurs
+	$(COMPOSE) ps
+
+logs: ## Logs de la stack
+	$(COMPOSE) logs -f
 
 db-up: .env ## Construit et démarre MySQL (port 127.0.0.1:3307 pour les tests)
 	$(COMPOSE_TEST) up -d --build --wait db
