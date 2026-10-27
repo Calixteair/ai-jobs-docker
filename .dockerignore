@@ -19,3 +19,14 @@ docs
 rapport
 tests
 *.md
+
+# Fichiers du dépôt sans rôle dans les images
+.claude
+.pre-commit-config.yaml
+Jenkinsfile
+Makefile
+compose*.yaml
+report-integration.xml
+requirements-dev.txt
+pyproject.toml
+scripts
