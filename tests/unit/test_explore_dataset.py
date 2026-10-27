@@ -91,6 +91,72 @@ def test_real_dataset_has_no_anomaly():
     assert all(explore.range_checks(df).values())
 
 
+# --------------------------------------------------------------------------- #
+# Compétences (issue #10)
+# --------------------------------------------------------------------------- #
+
+
+def test_split_skills_keeps_slash_inside_names():
+    skills = pd.Series(["CI/CD|Cloud (AWS/GCP/Azure)|Python"])
+    assert explore.split_skills(skills).iloc[0] == ["CI/CD", "Cloud (AWS/GCP/Azure)", "Python"]
+
+
+def test_deduplicate_keeps_first_occurrence():
+    assert explore.deduplicate(["SQL", "Python", "SQL", "Git"]) == ["SQL", "Python", "Git"]
+
+
+def test_skill_format_checks_detect_each_anomaly():
+    skills = pd.Series(["Python| SQL", "sql||Git", "Excel", "Python,R|Git"])
+    checks = explore.skill_format_checks(skills)
+
+    assert checks["single_item"] == 1  # « Excel »
+    assert checks["other_separator"] == 1  # « Python,R »
+    assert checks["padded"] == 1  # « SQL » précédé d'un espace
+    assert checks["empty"] == 1  # « sql||Git »
+    assert checks["case_variants"] == 1  # « SQL » et « sql »
+
+
+def test_repetitions_are_counted_per_offer():
+    skills = pd.Series(["SQL|Python|SQL", "Cloud|Git|Cloud|Git", "Python|Git"])
+
+    stats = explore.repetition_stats(skills)
+    repeated = explore.repeated_skills(skills)
+
+    assert stats == {"offers": 2, "extra_mentions": 3, "max_repetition": 2, "several_repeated": 1}
+    assert repeated.to_dict("records") == [
+        {"compétence": "Cloud", "offres": 1},
+        {"compétence": "Git", "offres": 1},
+        {"compétence": "SQL", "offres": 1},
+    ]
+
+
+def test_skill_frequencies_count_offers_after_deduplication():
+    skills = pd.Series(["SQL|Python|SQL", "SQL|Git"])
+    table = explore.skill_frequencies(skills).set_index("compétence")
+
+    assert table.loc["SQL", "offres"] == 2
+    assert table.loc["SQL", "mentions brutes"] == 3
+    assert table.loc["SQL", "% des offres"] == 100.0
+
+
+def test_similar_skills_counts_offers_with_both_labels():
+    skills = pd.Series(["Cloud|Cloud (AWS/GCP/Azure)", "Cloud|SQL", "Cloud (AWS/GCP/Azure)"])
+    row = explore.similar_skills(skills, [("Cloud", "Cloud (AWS/GCP/Azure)")]).iloc[0]
+
+    assert (row["offres avec A"], row["offres avec B"], row["offres avec les deux"]) == (2, 2, 1)
+
+
+def test_real_dataset_skills_match_issue_10():
+    """Critères d'acceptation de #10 : 93 compétences, 119 offres avec une répétition."""
+    df, _ = explore.load(explore.DEFAULT_CSV)
+    skills = df["required_skills"]
+
+    assert len(explore.skill_frequencies(skills)) == 93
+    assert explore.repetition_stats(skills)["offers"] == 119
+    assert not any(explore.skill_format_checks(skills).values())
+    assert explore.list_sizes(skills)["total"].tolist() == [9548, 9428]
+
+
 def test_report_is_reproducible():
     assert explore.build_report(explore.DEFAULT_CSV) == explore.build_report(explore.DEFAULT_CSV)
 

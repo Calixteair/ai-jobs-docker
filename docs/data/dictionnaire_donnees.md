@@ -33,7 +33,7 @@ Les chiffres détaillés (types, manquants, doublons, plages) sont produits par 
 | 12 | `remote_work` | Dimension | texte | Mode de travail | `On-site`, `Hybrid`, `Fully Remote` | Filtre obligatoire, répartition du télétravail |
 | 13 | `company_size` | Dimension (ordonnée) | texte | Taille de l'entreprise | `Startup (1-50)` … `Enterprise (5000+)`, `Big Tech (FAANG+)` | Analyse complémentaire |
 | 14 | `industry` | Dimension | texte | Secteur d'activité de l'entreprise | 12 secteurs (ex. `Finance`, `Healthcare`) | Filtre obligatoire « secteur » |
-| 15 | `required_skills` | Liste | texte | Compétences demandées, séparées par `\|` | ex. `Python\|SQL\|Cloud` | Top compétences (analysé dans #10) |
+| 15 | `required_skills` | Liste | texte | Compétences demandées, séparées par `\|` | ex. `Python\|SQL\|Cloud` | Top compétences ; éclatée en tables `skills` / `job_skills` ([décisions](decisions_nettoyage.md)) |
 | 16 | `ai_salary_premium_pct` | Mesure | décimal | Prime salariale liée à l'IA, en % | 3,0 à 18,0 | Comparaison rôles LLM / autres |
 | 17 | `demand_score` | Mesure | entier | Score de demande pour le poste | 68 à 98 | **KPI score moyen de demande** |
 | 18 | `demand_growth_yoy_pct` | Mesure | décimal | Croissance de la demande sur un an, en % | 5,0 à 87,8 | Métiers en croissance |
