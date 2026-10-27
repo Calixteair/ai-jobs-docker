@@ -1,0 +1,31 @@
+name: User story
+description: Fonctionnalité vue par l'utilisateur du dashboard
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: story
+    attributes:
+      label: User story
+      placeholder: En tant que <utilisateur>, je veux <action> afin de <bénéfice>.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Critères d'acceptation
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Zone
+      options: [data, app, devops, test, docs, rapport]
+    validations:
+      required: true
+  - type: input
+    id: reference
+    attributes:
+      label: Référence du sujet
+      placeholder: ex. Sujet §11.2

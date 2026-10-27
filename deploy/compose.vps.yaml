@@ -1,0 +1,58 @@
+# Compose de déploiement sur le VPS calixteair.fr (staging et prod), distinct du
+# compose.yaml du correcteur : images publiées sur GHCR, aucun build, aucun port publié.
+#
+# Gabarit : __ENV__ est remplacé par staging ou prod par deploy/render.sh.
+# Les variables MYSQL_* viennent de /run/ai-jobs-__ENV__/.env, rendu par bao-agent
+# (OpenBao secret/ai-jobs/__ENV__/mysql) ; bao-deploy.sh fait pull + up -d.
+name: ai-jobs-__ENV__
+
+services:
+  db:
+    # mysql:8.4 + scripts d'initialisation embarqués (bao-deploy.sh ne copie aucun fichier)
+    image: ghcr.io/calixteair/ai-jobs-docker-db:__ENV__
+    container_name: ai-jobs-__ENV__-db
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?err}
+      MYSQL_USER: ${MYSQL_USER:?err}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?err}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?err}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u $$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    mem_limit: 512m
+    restart: unless-stopped
+
+  app:
+    image: ghcr.io/calixteair/ai-jobs-docker-app:__ENV__
+    container_name: ai-jobs-__ENV__-app
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE:?err}
+      DB_USER: ${MYSQL_USER:?err}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?err}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+      # Joint par Nginx Proxy Manager sous le nom ai-jobs-__ENV__-app:8501
+      - nginx-reverse-proxy
+    mem_limit: 512m
+    restart: unless-stopped
+    # Aucun port publié : accès uniquement via NPM (WebSockets activés)
+
+volumes:
+  mysql_data:
+
+networks:
+  internal:
+  nginx-reverse-proxy:
+    external: true

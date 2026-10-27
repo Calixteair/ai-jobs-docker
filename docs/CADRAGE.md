@@ -39,7 +39,7 @@ Le correcteur doit pouvoir **cloner, suivre le README, `docker compose up --buil
 ### 2.2 Extensions retenues (hors barème, valorisent le rapport)
 
 - **Bonus Kubernetes** (jusqu'à +2 pts) : Minikube ou Kind, namespace, PVC, Services, Job d'import.
-- **CI GitHub Actions** : lint, tests unitaires/intégration, tests T1–T7 automatisés.
+- **CI/CD Jenkins** (`jenkins.calixteair.fr`, serveur auto-hébergé) : lint, tests unitaires/intégration, tests T1–T7 automatisés, déploiement.
 - **CD vers le VPS** : environnement *staging* (branche `dev`) et *prod* (branche `main`).
 - **Gestion agile** : GitHub Projects (backlog, sprints, board).
 
@@ -70,7 +70,7 @@ Le correcteur doit pouvoir **cloner, suivre le README, `docker compose up --buil
 | Visualisation | **Plotly** | Graphiques interactifs, natif dans Streamlit |
 | Tests | **pytest**, `streamlit.testing.AppTest`, testcontainers | Voir §8 |
 | Qualité | **ruff** (lint + format) | Un seul outil, rapide |
-| CI/CD | **GitHub Actions** + **GHCR** | Intégré au repo et au board |
+| CI/CD | **Jenkins** (auto-hébergé) + **GHCR** | Pipeline versionné (`Jenkinsfile`), SSO Keycloak, builds isolés (Docker-in-Docker), statut remonté sur les PR |
 | Orchestration bonus | **Kind** (ou Minikube) | Cluster local léger |
 
 ### 4.1 Justification MySQL (réponse à la question obligatoire §6)
@@ -128,8 +128,8 @@ Navigateur ──► :8501 ┌──────────────┐  ré
 | **staging** | `dev` | push sur `dev` (automatique) | `ai-jobs-staging.calixteair.fr` | protégé (access list NPM) |
 | **prod** | `main` | push sur `main` + **approbation manuelle** | `ai-jobs.calixteair.fr` | public |
 
-Sur le VPS : deux projets Compose isolés (`ai-jobs-staging`, `ai-jobs-prod`), chacun avec **son propre `.env`, son volume et son réseau**. Exposition via Nginx Proxy Manager (**WebSockets activés**, requis par Streamlit).
-Fichier dédié `compose.prod.yaml` qui remplace `build:` par `image: ghcr.io/<owner>/ai-jobs-docker:<tag>` — le `compose.yaml` du correcteur reste inchangé.
+Sur le VPS : deux stacks Compose isolées (`projects/ai-jobs-staging`, `projects/ai-jobs-prod`), chacune avec **ses secrets OpenBao, son volume et son réseau**. Exposition via Nginx Proxy Manager (**WebSockets activés**, requis par Streamlit).
+Deux images GHCR (`ai-jobs-docker-app`, `ai-jobs-docker-db` qui embarque les scripts d'init) ; le fichier `deploy/compose.vps.yaml` les référence par tag — le `compose.yaml` du correcteur reste inchangé. Détails : [`VPS_SETUP.md`](VPS_SETUP.md).
 
 ## 6. Stratégie Git
 
@@ -155,15 +155,19 @@ Conventions :
 
 ## 7. CI/CD
 
-| Workflow | Déclencheur | Étapes |
-|---|---|---|
-| `ci.yml` | PR + push sur toutes branches | `ruff check` → `pytest` (unit) → `docker compose build` → `compose up --wait` → tests intégration + smoke T1–T7 → `down -v` |
-| `deploy.yml` | push sur `dev` / `main` | build + push image GHCR (`:sha`, `:dev` ou `:prod`) → SSH VPS → `docker compose pull && up -d` → smoke test URL publique |
+Un seul pipeline, le `Jenkinsfile`, exécuté par Jenkins (`jenkins.calixteair.fr`, configuration du serveur dans le dépôt `jenkins-stack`) :
 
-- **GitHub Environments** `staging` et `production` : secrets séparés (clé SSH de déploiement, hôte), `production` avec *required reviewer*.
-- Sur le VPS : utilisateur `deploy` dédié (groupe docker, aucun sudo), clé SSH réservée au déploiement.
-- Les secrets MySQL ne transitent **jamais** par la CI : `.env` présent uniquement sur le VPS.
-- Toutes les commandes passent par un **`Makefile`** (`make lint`, `make test`, `make smoke`) → portable vers Jenkins si l'école en fournit un (`pytest --junitxml`).
+| Déclencheur | Étapes |
+|---|---|
+| PR et toute branche | `ruff` → `pytest` (unit) → intégration MySQL + T7 → smoke T1–T5 (`make smoke`) → gitleaks |
+| push sur `dev` | + images GHCR (`:sha-…`, `:staging`) → SSH VPS → `bao-deploy.sh` (`pull && up -d`) → contrôle de l'URL publique |
+| push sur `main` | + images GHCR (`:sha-…`) → **approbation manuelle** (étape `input`, groupe `jenkins-admins`) → `:prod` → déploiement → contrôle de l'URL |
+
+- Accès à Jenkins par SSO Keycloak : membres du groupe (lancer, annuler), correcteur (lecture seule), sur ce seul projet.
+- Identifiants de déploiement (jeton GHCR, une clé SSH par environnement) gérés par Jenkins, valeurs dans OpenBao.
+- Sur le VPS : pattern existant `ci-deployers` — un utilisateur `ci-ai-jobs-<env>` par environnement, clé SSH à commande forcée qui ne peut redéployer que sa propre stack.
+- Les secrets MySQL ne transitent **jamais** par la CI : stockés dans OpenBao, rendus en tmpfs par `bao-agent` sur le VPS.
+- Toutes les commandes passent par un **`Makefile`** (`make lint`, `make test`, `make smoke`) : identiques en local et en CI, rapports `pytest --junitxml` publiés dans Jenkins.
 
 ## 8. Stratégie de tests
 
@@ -254,7 +258,7 @@ Chacun teste son périmètre et rédige les sections correspondantes du rapport.
 ## 12. Décisions ouvertes
 
 - [ ] Attribution des rôles
-- [ ] Nom du repo GitHub et propriétaire (compte perso ou organisation)
+- [x] Nom du repo GitHub et propriétaire → `Calixteair/ai-jobs-docker`, public
 - [ ] Sous-domaines staging/prod définitifs
 - [ ] Kind ou Minikube pour le bonus
 - [ ] Jenkins école disponible ? (Docker sur agents, accès sortant, webhook)

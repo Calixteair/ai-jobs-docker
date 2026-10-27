@@ -1,0 +1,25 @@
+name: Tâche technique
+description: Outillage, infrastructure, refactoring, documentation
+labels: ["type:chore"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Objectif
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Critères d'acceptation
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Zone
+      options: [data, app, devops, test, docs, rapport]
+    validations:
+      required: true
