@@ -1,0 +1,9 @@
+# Dépendances de l'application (installées dans l'image Docker).
+# Versions épinglées : build reproductible. Outillage de dev : requirements-dev.txt.
+streamlit==1.66.1
+pandas==2.3.3
+plotly==7.1.0
+SQLAlchemy==2.1.6
+PyMySQL==1.2.3
+# Requis par PyMySQL pour l'authentification caching_sha2_password de MySQL 8
+cryptography==50.0.2
