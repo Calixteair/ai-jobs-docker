@@ -12,6 +12,7 @@
 - Plages de valeurs : **0 anomalie(s)** sur 7 contrôles
 - Types à convertir au nettoyage : **4 colonne(s)**
 - Compétences : **93 distinctes**, format : **0 anomalie(s)** sur 5 contrôles, **119 offres** avec une compétence répétée
+- Cohérence : **288 salaires** au-dessus de leur fourchette, niveau et années d'expérience cohérents pour **401 offres** sur 1500, colonnes dérivées : **0 incohérence(s)** sur 5
 
 ## 1. Dimensions et colonnes
 
@@ -182,6 +183,54 @@ Paires repérées à la lecture de la liste. Une paire présente dans une même 
 | ML | ML Algorithms | 89 | 43 | 0 |
 
 Décisions de traitement : [décisions de nettoyage](decisions_nettoyage.md).
+
+## 7. Cohérence métier
+
+### 7.1 Salaire annuel et fourchette
+
+- `annual_salary_usd` au-dessus de `salary_max_usd` : **288** offres (19.2%) ; en dessous de `salary_min_usd` : **0**.
+- Fourchette identique pour toutes les offres d'un même `job_title` : **oui**.
+- Le salaire ne dépasse jamais 1.2 × `salary_max_usd`, et **127 offres** sont exactement à ce plafond.
+
+| experience_level | offres au-dessus | % du niveau |
+|---|---|---|
+| Entry (0-2 yrs) | 3 | 0.8 |
+| Mid (3-5 yrs) | 24 | 6.5 |
+| Senior (6-9 yrs) | 94 | 25.8 |
+| Lead (10+ yrs) | 167 | 43.8 |
+
+### 7.2 Niveau et années d'expérience
+
+Années demandées dans la tranche annoncée par le niveau : **401 offres** sur 1500 (26.7%). Corrélation entre salaire et années d'expérience : **0.08**.
+
+| experience_level | années moyennes | salaire moyen | 0-2 | 3-5 | 6-9 | 10+ |
+|---|---|---|---|---|---|---|
+| Entry (0-2 yrs) | 6.2 | 150039 | 40 | 129 | 166 | 50 |
+| Mid (3-5 yrs) | 6.2 | 175984 | 18 | 135 | 176 | 41 |
+| Senior (6-9 yrs) | 6.3 | 214280 | 25 | 114 | 181 | 44 |
+| Lead (10+ yrs) | 6.1 | 240055 | 28 | 132 | 176 | 45 |
+
+### 7.3 Colonnes dérivées
+
+| Contrôle | Statut |
+|---|---|
+| `is_senior` = 1 exactement pour les niveaux Senior et Lead | ✅ |
+| `is_remote_friendly` = 1 exactement pour Hybrid et Fully Remote | ✅ |
+| `salary_tier` correspond à la tranche de `annual_salary_usd` | ✅ |
+| `is_llm_role` est le même pour toutes les offres d'un `job_title` | ✅ |
+| `job_category` est la même pour toutes les offres d'un `job_title` | ✅ |
+
+### 7.4 Répartition dans le temps
+
+| année | offres | mois | % des offres | offres par mois |
+|---|---|---|---|---|
+| 2025 | 624 | 12 | 41.6 | 52.0 |
+| 2026 | 876 | 3 | 58.4 | 292.0 |
+
+### 7.5 Offres sans pays (`country = Global`)
+
+- **82 offres**, toutes avec la ville `Remote` ; `Remote` n'apparaît dans aucun autre pays (0).
+- Mode de travail de ces offres : Hybrid 42, Fully Remote 22, On-site 18.
 
 ## Annexe — fréquence des 93 compétences
 

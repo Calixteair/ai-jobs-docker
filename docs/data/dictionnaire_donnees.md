@@ -23,11 +23,11 @@ Les chiffres détaillés (types, manquants, doublons, plages) sont produits par 
 | 2 | `job_title` | Dimension | texte | Intitulé du poste | 25 métiers (ex. `LLM Engineer`, `Data Scientist`) | Filtre « métier », graphiques par métier |
 | 3 | `job_category` | Dimension | texte | Famille de métiers | 12 familles (ex. `AI Engineering`, `Research`) | Filtre « catégorie de métier » |
 | 4 | `experience_level` | Dimension (ordonnée) | texte | Niveau d'expérience demandé | `Entry (0-2 yrs)`, `Mid (3-5 yrs)`, `Senior (6-9 yrs)`, `Lead (10+ yrs)` | Filtre obligatoire, salaire par niveau |
-| 5 | `years_of_experience` | Mesure | entier | Années d'expérience demandées | 1 à 15 | Descriptif |
+| 5 | `years_of_experience` | Mesure | entier | Années d'expérience demandées | 1 à 15 | Descriptif uniquement : sans lien avec le niveau ni le salaire ([K3](decisions_nettoyage.md)) |
 | 6 | `education_required` | Dimension (ordonnée) | texte | Diplôme demandé | `Bootcamp/Self-taught`, `Associate's`, `Bachelor's`, `Master's`, `PhD` | Analyse complémentaire |
 | 7 | `annual_salary_usd` | Mesure | décimal | Salaire annuel proposé, en dollars US | 90 000 à 384 000 | **KPI salaire moyen et médian**, la plupart des graphiques |
-| 8 | `salary_min_usd` | Mesure | entier | Borne basse de la fourchette salariale | 90 000 à 180 000 | Contrôle de cohérence (#11) |
-| 9 | `salary_max_usd` | Mesure | entier | Borne haute de la fourchette salariale | 180 000 à 320 000 | Contrôle de cohérence (#11) |
+| 8 | `salary_min_usd` | Mesure | entier | Borne basse de la fourchette salariale | 90 000 à 180 000 | Fourchette de référence du métier ([K1](decisions_nettoyage.md)) |
+| 9 | `salary_max_usd` | Mesure | entier | Borne haute de la fourchette salariale | 180 000 à 320 000 | Fourchette de référence du métier ; 288 salaires la dépassent ([K1](decisions_nettoyage.md)) |
 | 10 | `city` | Dimension | texte | Ville du poste | 20 villes, dont `Remote` | Descriptif |
 | 11 | `country` | Dimension | texte | Pays du poste | 14 valeurs, dont `Global` (offres sans pays) | Filtre obligatoire, salaire par pays |
 | 12 | `remote_work` | Dimension | texte | Mode de travail | `On-site`, `Hybrid`, `Fully Remote` | Filtre obligatoire, répartition du télétravail |
@@ -40,13 +40,13 @@ Les chiffres détaillés (types, manquants, doublons, plages) sont produits par 
 | 19 | `benefits_score_10` | Mesure | décimal | Note des avantages sociaux, sur 10 | 6,0 à 9,8 | Analyse complémentaire |
 | 20 | `posting_year` | Temps | entier | Année de publication | 2025, 2026 | Évolution dans le temps |
 | 21 | `posting_month` | Temps | entier | Mois de publication | 1 à 12 | Évolution dans le temps |
-| 22 | `is_senior` | Dérivée | 0/1 | 1 si le poste est de niveau Senior ou Lead | 0, 1 | À vérifier vs `experience_level` (#11) |
-| 23 | `is_remote_friendly` | Dérivée | 0/1 | 1 si le poste est Hybrid ou Fully Remote | 0, 1 | À vérifier vs `remote_work` (#11) |
+| 22 | `is_senior` | Dérivée | 0/1 | 1 si le poste est de niveau Senior ou Lead | 0, 1 | Cohérent avec `experience_level` ✅ |
+| 23 | `is_remote_friendly` | Dérivée | 0/1 | 1 si le poste est Hybrid ou Fully Remote | 0, 1 | Cohérent avec `remote_work` ✅ |
 | 24 | `is_llm_role` | Dérivée | 0/1 | 1 si le métier est lié aux LLM / à l'IA générative | 0, 1 | Comparaison rôles LLM / autres |
-| 25 | `salary_tier` | Dérivée | texte | Tranche de salaire | `Entry (<$100k)`, `Mid ($100-150k)`, `Upper-Mid ($150-200k)`, `Senior ($200-300k)`, `Elite (>$300k)` | À vérifier vs `annual_salary_usd` (#11) |
+| 25 | `salary_tier` | Dérivée | texte | Tranche de salaire | `Entry (<$100k)`, `Mid ($100-150k)`, `Upper-Mid ($150-200k)`, `Senior ($200-300k)`, `Elite (>$300k)` | Cohérent avec `annual_salary_usd` ✅ |
 
 ## Observations
 
 - **`job_title` détermine `job_category` et `is_llm_role`** : chaque métier appartient à une seule famille, et `is_llm_role` vaut 1 exactement pour 5 métiers (`AI Agent Developer`, `Generative AI Engineer`, `LLM Engineer`, `Prompt Engineer`, `RAG Engineer`). Les filtres « catégorie » et « métier » sont donc hiérarchiques.
-- **`country = Global` et `city = Remote`** ne sont pas de vrais lieux : à traiter comme une catégorie à part dans les graphiques par pays (#11).
+- **`country = Global` et `city = Remote`** ne sont pas de vrais lieux : à traiter comme une catégorie à part dans les graphiques par pays ([K6](decisions_nettoyage.md)).
 - **`annual_salary_usd` est lu en décimal** alors que les autres salaires sont entiers : contrôlé à l'étape « types ».
