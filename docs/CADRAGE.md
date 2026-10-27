@@ -155,15 +155,19 @@ Conventions :
 
 ## 7. CI/CD
 
-| Workflow | Déclencheur | Étapes |
-|---|---|---|
-| `ci.yml` | PR + push sur toutes branches | `ruff check` → `pytest` (unit) → `docker compose build` → `compose up --wait` → tests intégration + smoke T1–T7 → `down -v` |
-| `deploy.yml` | push sur `dev` / `main` | build + push images GHCR (`:sha-…`, `:staging` ou `:prod`) → SSH VPS → `bao-deploy.sh` (`pull && up -d`) → smoke test URL publique |
+Un seul pipeline, le `Jenkinsfile`, exécuté par Jenkins (`jenkins.calixteair.fr`, configuration du serveur dans le dépôt `jenkins-stack`) :
 
-- **GitHub Environments** `staging` et `production` : secrets séparés (clé SSH de déploiement, hôte), `production` avec *required reviewer*.
+| Déclencheur | Étapes |
+|---|---|
+| PR et toute branche | `ruff` → `pytest` (unit) → intégration MySQL + T7 → smoke T1–T5 (`make smoke`) → gitleaks |
+| push sur `dev` | + images GHCR (`:sha-…`, `:staging`) → SSH VPS → `bao-deploy.sh` (`pull && up -d`) → contrôle de l'URL publique |
+| push sur `main` | + images GHCR (`:sha-…`) → **approbation manuelle** (étape `input`, groupe `jenkins-admins`) → `:prod` → déploiement → contrôle de l'URL |
+
+- Accès à Jenkins par SSO Keycloak : membres du groupe (lancer, annuler), correcteur (lecture seule), sur ce seul projet.
+- Identifiants de déploiement (jeton GHCR, une clé SSH par environnement) gérés par Jenkins, valeurs dans OpenBao.
 - Sur le VPS : pattern existant `ci-deployers` — un utilisateur `ci-ai-jobs-<env>` par environnement, clé SSH à commande forcée qui ne peut redéployer que sa propre stack.
 - Les secrets MySQL ne transitent **jamais** par la CI : stockés dans OpenBao, rendus en tmpfs par `bao-agent` sur le VPS.
-- Toutes les commandes passent par un **`Makefile`** (`make lint`, `make test`, `make smoke`) → portable vers Jenkins si l'école en fournit un (`pytest --junitxml`).
+- Toutes les commandes passent par un **`Makefile`** (`make lint`, `make test`, `make smoke`) : identiques en local et en CI, rapports `pytest --junitxml` publiés dans Jenkins.
 
 ## 8. Stratégie de tests
 
