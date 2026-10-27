@@ -1,16 +1,19 @@
-"""Exploration du dataset AI Jobs Market (issue #9, sujet Phase 1 points 1 à 4).
+"""Exploration du dataset AI Jobs Market (issues #9 et #10, sujet Phase 1 points 1 à 5).
 
-Contrôle les dimensions, les valeurs manquantes, les doublons et les types du
-CSV brut, puis écrit les résultats chiffrés dans docs/data/exploration_dataset.md.
+Contrôle les dimensions, les valeurs manquantes, les doublons, les types et le
+format des compétences (`required_skills`) du CSV brut, puis écrit les résultats
+chiffrés dans docs/data/exploration_dataset.md.
 
 Le rapport est entièrement régénéré à chaque exécution : ne pas l'éditer à la main.
-Le sens de chaque variable est décrit dans docs/data/dictionnaire_donnees.md.
+Le sens de chaque variable est décrit dans docs/data/dictionnaire_donnees.md et
+les décisions qui en découlent dans docs/data/decisions_nettoyage.md.
 
 Usage : python scripts/explore_dataset.py [chemin_csv] [chemin_rapport]
 """
 
 import csv
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pandas as pd
@@ -73,6 +76,23 @@ DUPLICATE_LABELS = {
     "without_measures": "Identiques hors `job_id`, compétences et mesures chiffrées",
     "label_variants": "Libellés écrits de plusieurs façons (casse, espaces)",
 }
+
+SKILL_FORMAT_LABELS = {
+    "single_item": "Offres sans séparateur `|` (une seule compétence)",
+    "other_separator": "Compétences contenant `,` ou `;` (autre séparateur possible)",
+    "padded": "Compétences avec des espaces au début ou à la fin",
+    "empty": "Compétences vides (`A||B`, `|` en fin de liste)",
+    "case_variants": "Compétences écrites de plusieurs façons (casse, espaces)",
+}
+
+# Libellés proches repérés à la lecture des compétences : faut-il les fusionner ?
+SIMILAR_SKILLS = [
+    ("Cloud", "Cloud (AWS/GCP/Azure)"),
+    ("Statistics", "Advanced Statistics"),
+    ("Fine-tuning", "LLM Fine-tuning"),
+    ("Prompt Engineering", "Prompt Design"),
+    ("ML", "ML Algorithms"),
+]
 
 
 # --------------------------------------------------------------------------- #
@@ -217,6 +237,111 @@ def type_conversions(df: pd.DataFrame) -> list[tuple[str, str, str]]:
 
 
 # --------------------------------------------------------------------------- #
+# Compétences (issue #10)
+# --------------------------------------------------------------------------- #
+
+
+def split_skills(skills: pd.Series) -> pd.Series:
+    """Liste des compétences de chaque offre, telles qu'écrites (répétitions comprises)."""
+    return skills.str.split(SKILL_SEPARATOR, regex=False)
+
+
+def deduplicate(skills: list[str]) -> list[str]:
+    """Règle retenue : chaque compétence une seule fois, à sa première position."""
+    return list(dict.fromkeys(skills))
+
+
+def skill_format_checks(skills: pd.Series) -> dict[str, int]:
+    """Le format `A|B|C` est-il respecté partout ?"""
+    items = split_skills(skills).explode()
+    stripped = items.str.strip()
+    named = stripped[stripped != ""]
+    spellings = named.groupby(named.str.lower()).nunique()
+    return {
+        "single_item": int((~skills.str.contains(SKILL_SEPARATOR, regex=False)).sum()),
+        "other_separator": int(items.str.contains(r"[,;]").sum()),
+        "padded": int((items != stripped).sum()),
+        "empty": int((stripped == "").sum()),
+        "case_variants": int((spellings > 1).sum()),
+    }
+
+
+def list_sizes(skills: pd.Series) -> pd.DataFrame:
+    """Nombre de compétences par offre, telles qu'écrites et après dédoublonnage."""
+    raw_lists = split_skills(skills)
+    sizes = {
+        "telles qu'écrites": raw_lists.str.len(),
+        "après dédoublonnage": raw_lists.map(deduplicate).str.len(),
+    }
+    return pd.DataFrame(
+        [
+            {
+                "listes": name,
+                "min": int(size.min()),
+                "moyenne": round(float(size.mean()), 2),
+                "max": int(size.max()),
+                "total": int(size.sum()),
+            }
+            for name, size in sizes.items()
+        ]
+    )
+
+
+def repetition_stats(skills: pd.Series) -> dict[str, int]:
+    """Compétences écrites plusieurs fois dans une même offre."""
+    counts = split_skills(skills).map(Counter)
+    repeated_per_offer = counts.map(lambda c: sum(n > 1 for n in c.values()))
+    return {
+        "offers": int((repeated_per_offer > 0).sum()),
+        "extra_mentions": int(counts.map(lambda c: sum(n - 1 for n in c.values())).sum()),
+        "max_repetition": int(counts.map(lambda c: max(c.values())).max()),
+        "several_repeated": int((repeated_per_offer > 1).sum()),
+    }
+
+
+def repeated_skills(skills: pd.Series) -> pd.DataFrame:
+    """Pour chaque compétence répétée : nombre d'offres où elle apparaît plusieurs fois."""
+    counts = split_skills(skills).map(Counter)
+    repeated = counts.map(lambda c: [name for name, n in c.items() if n > 1]).explode().dropna()
+    table = repeated.value_counts().rename_axis("compétence").reset_index(name="offres")
+    return table.sort_values(["offres", "compétence"], ascending=[False, True], ignore_index=True)
+
+
+def skill_frequencies(skills: pd.Series) -> pd.DataFrame:
+    """Offres par compétence (après dédoublonnage) et mentions telles qu'écrites."""
+    raw_lists = split_skills(skills)
+    offers = raw_lists.map(deduplicate).explode().value_counts()
+    mentions = raw_lists.explode().value_counts()
+    table = pd.DataFrame(
+        {
+            "compétence": offers.index,
+            "offres": offers.to_numpy(),
+            "% des offres": (100 * offers / len(skills)).round(1).to_numpy(),
+            "mentions brutes": mentions.reindex(offers.index).to_numpy(),
+        }
+    )
+    return table.sort_values(["offres", "compétence"], ascending=[False, True], ignore_index=True)
+
+
+def similar_skills(skills: pd.Series, pairs: list[tuple[str, str]]) -> pd.DataFrame:
+    """Pour chaque paire de libellés proches : offres avec l'un, l'autre, ou les deux."""
+    items = split_skills(skills).explode()
+    has = {name: items.eq(name).groupby(level=0).any() for pair in pairs for name in pair}
+    return pd.DataFrame(
+        [
+            {
+                "libellé A": first,
+                "libellé B": second,
+                "offres avec A": int(has[first].sum()),
+                "offres avec B": int(has[second].sum()),
+                "offres avec les deux": int((has[first] & has[second]).sum()),
+            }
+            for first, second in pairs
+        ]
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Rapport Markdown
 # --------------------------------------------------------------------------- #
 
@@ -266,6 +391,21 @@ def build_report(source: Path) -> str:
     salary_written_as_float = int(raw["annual_salary_usd"].str.endswith(".0").sum())
     failed_ranges = [label for label, ok in ranges.items() if not ok]
 
+    skills = df["required_skills"]
+    skill_format = skill_format_checks(skills)
+    sizes = list_sizes(skills)
+    repetitions = repetition_stats(skills)
+    repeated = repeated_skills(skills)
+    frequencies = skill_frequencies(skills)
+    overcounted = frequencies[frequencies["mentions brutes"] != frequencies["offres"]].assign(
+        surcompte=lambda t: t["mentions brutes"] - t["offres"]
+    )
+    names = frequencies["compétence"]
+    longest = names[names.str.len().idxmax()]
+    non_ascii = sorted({char for name in names for char in name if not char.isascii()})
+    with_slash = sorted(name for name in names if "/" in name)
+    links = int(sizes.loc[sizes["listes"] == "après dédoublonnage", "total"].iloc[0])
+
     def count_anomalies(results: dict[str, int]) -> str:
         found = sum(1 for count in results.values() if count)
         return f"**{found} anomalie(s)** sur {len(results)} contrôles"
@@ -290,6 +430,9 @@ def build_report(source: Path) -> str:
             f"- Plages de valeurs : **{len(failed_ranges)} anomalie(s)** "
             f"sur {len(ranges)} contrôles",
             f"- Types à convertir au nettoyage : **{len(conversions)} colonne(s)**",
+            f"- Compétences : **{len(names)} distinctes**, format : "
+            f"{count_anomalies(skill_format)}, **{repetitions['offers']} offres** avec une "
+            "compétence répétée",
             "",
             "## 1. Dimensions et colonnes",
             "",
@@ -335,6 +478,61 @@ def build_report(source: Path) -> str:
             "## 5. Conversions de types à prévoir au nettoyage",
             "",
             md_table(conversions_table) if conversions else "Aucune.",
+            "",
+            "## 6. Compétences (`required_skills`)",
+            "",
+            "Chaque offre liste ses compétences dans une seule cellule, séparées par `|` "
+            f"(ex. `{skills.iloc[0]}`). Le `/` n'est pas un séparateur : il fait partie du "
+            f"nom de {len(with_slash)} compétence(s) ({', '.join(f'`{n}`' for n in with_slash)}).",
+            "",
+            checks_table(skill_format, SKILL_FORMAT_LABELS),
+            "",
+            "### 6.1 Taille des listes",
+            "",
+            md_table(sizes),
+            "",
+            f"**{len(names)} compétences distinctes.** Après éclatement, la table `skills` "
+            f"comptera {len(names)} lignes et la table de liaison `job_skills` {links} lignes. "
+            f"Nom le plus long : {len(longest)} caractères (`{longest}`) ; caractères non "
+            f"ASCII : {', '.join(non_ascii) if non_ascii else 'aucun'}.",
+            "",
+            "### 6.2 Compétences répétées dans une même offre",
+            "",
+            f"- **{repetitions['offers']} offres** contiennent une compétence écrite plusieurs "
+            f"fois ({repetitions['extra_mentions']} mentions en trop, au plus "
+            f"×{repetitions['max_repetition']} ; {repetitions['several_repeated']} offre(s) "
+            "avec plusieurs compétences répétées).",
+            f"- Seules **{len(repeated)} compétences** sont concernées :",
+            "",
+            md_table(repeated),
+            "",
+            "Exemples :",
+            "",
+            md_table(
+                df.loc[split_skills(skills).map(lambda s: len(s) != len(set(s))), ["job_id"]]
+                .assign(required_skills=skills)
+                .head(5)
+            ),
+            "",
+            "Effet sur les comptages si l'on ne dédoublonne pas :",
+            "",
+            md_table(overcounted),
+            "",
+            "### 6.3 Libellés proches",
+            "",
+            "Paires repérées à la lecture de la liste. Une paire présente dans une même offre "
+            "y est écrite comme deux compétences distinctes.",
+            "",
+            md_table(similar_skills(skills, SIMILAR_SKILLS)),
+            "",
+            "Décisions de traitement : [décisions de nettoyage](decisions_nettoyage.md).",
+            "",
+            f"## Annexe — fréquence des {len(names)} compétences",
+            "",
+            "`offres` : nombre d'offres qui demandent la compétence (après dédoublonnage) ; "
+            "`mentions brutes` : nombre d'apparitions dans le CSV tel qu'il est écrit.",
+            "",
+            md_table(frequencies),
             "",
         ]
     )
