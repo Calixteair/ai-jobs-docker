@@ -56,6 +56,20 @@ pipeline {
       }
     }
 
+    stage('Smoke tests T1 à T5') {
+      steps {
+        // Stack complète (app + db) construite depuis zéro, puis down -v.
+        // Port et nom de projet propres à l'exécuteur : deux builds peuvent tourner en parallèle.
+        sh '''
+          export SMOKE_HOST=docker
+          export APP_PORT=$((8601 + EXECUTOR_NUMBER))
+          export COMPOSE_PROJECT_NAME="ai-jobs-smoke-$EXECUTOR_NUMBER"
+          cp .env.example .env
+          make smoke
+        '''
+      }
+    }
+
     stage('Scan de secrets (gitleaks)') {
       steps {
         // Chemin identique dans l'agent et dans dind : le montage $PWD fonctionne
