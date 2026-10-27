@@ -1,6 +1,6 @@
 # Décisions de nettoyage
 
-Chaque décision part d'un constat chiffré du [rapport d'exploration](exploration_dataset.md) et sera appliquée par `scripts/cleaning.py` (#12) puis par le schéma de la base (#14, #16).
+Chaque décision part d'un constat chiffré du [rapport d'exploration](exploration_dataset.md) et est appliquée par `scripts/cleaning.py` (trace dans le [journal de nettoyage](journal_nettoyage.md)), puis par le schéma de la base (#14, #16).
 
 ## Compétences (`required_skills`) — issue #10
 
