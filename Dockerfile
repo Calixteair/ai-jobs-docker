@@ -6,6 +6,9 @@
 # précompilées de pandas / cryptography, contrairement à Alpine (musl).
 FROM python:3.12-slim
 
+# Relie le package GHCR au dépôt (affiché sur la page du dépôt, description et licence)
+LABEL org.opencontainers.image.source="https://github.com/Calixteair/ai-jobs-docker"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
