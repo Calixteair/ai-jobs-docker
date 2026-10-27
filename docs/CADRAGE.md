@@ -39,7 +39,7 @@ Le correcteur doit pouvoir **cloner, suivre le README, `docker compose up --buil
 ### 2.2 Extensions retenues (hors barème, valorisent le rapport)
 
 - **Bonus Kubernetes** (jusqu'à +2 pts) : Minikube ou Kind, namespace, PVC, Services, Job d'import.
-- **CI GitHub Actions** : lint, tests unitaires/intégration, tests T1–T7 automatisés.
+- **CI/CD Jenkins** (`jenkins.calixteair.fr`, serveur auto-hébergé) : lint, tests unitaires/intégration, tests T1–T7 automatisés, déploiement.
 - **CD vers le VPS** : environnement *staging* (branche `dev`) et *prod* (branche `main`).
 - **Gestion agile** : GitHub Projects (backlog, sprints, board).
 
@@ -70,7 +70,7 @@ Le correcteur doit pouvoir **cloner, suivre le README, `docker compose up --buil
 | Visualisation | **Plotly** | Graphiques interactifs, natif dans Streamlit |
 | Tests | **pytest**, `streamlit.testing.AppTest`, testcontainers | Voir §8 |
 | Qualité | **ruff** (lint + format) | Un seul outil, rapide |
-| CI/CD | **GitHub Actions** + **GHCR** | Intégré au repo et au board |
+| CI/CD | **Jenkins** (auto-hébergé) + **GHCR** | Pipeline versionné (`Jenkinsfile`), SSO Keycloak, builds isolés (Docker-in-Docker), statut remonté sur les PR |
 | Orchestration bonus | **Kind** (ou Minikube) | Cluster local léger |
 
 ### 4.1 Justification MySQL (réponse à la question obligatoire §6)

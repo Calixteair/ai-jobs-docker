@@ -60,6 +60,14 @@ Exemples : `feat(app): filtres pays et secteur`, `fix(db): healthcheck en TCP`.
 3. Carte en **In review**, un autre membre relit et approuve.
 4. CI verte et conversations résolues → merge, la branche est supprimée automatiquement.
 
+### CI : Jenkins
+
+La CI tourne sur [jenkins.calixteair.fr](https://jenkins.calixteair.fr) (connexion Keycloak avec le compte fourni par l'équipe DevOps), dossier **Calixteair → ai-jobs-docker** : un job par branche et par PR.
+
+- Étapes : lint (ruff), tests unitaires, tests d'intégration MySQL + T7, scan de secrets (gitleaks). Mêmes commandes qu'en local : `make lint test test-int`.
+- Le statut remonte sur la PR (`continuous-integration/jenkins/pr-merge`) : il est **obligatoire** pour merger dans `dev` et `main`. Le lien *Details* ouvre le build (logs, rapports de tests).
+- Relancer un build : bouton **Build Now** sur le job de la branche ou de la PR (membres du groupe uniquement).
+
 Relire une PR, c'est : comprendre le changement, lancer les commandes de test, vérifier l'absence de secret et poser des questions plutôt que deviner.
 
 ## Definition of Done
@@ -71,4 +79,4 @@ Relire une PR, c'est : comprendre le changement, lancer les commandes de test, v
 
 ## Secrets
 
-Jamais de mot de passe, token ou clé dans le dépôt (il est public) : uniquement dans `.env`, qui est ignoré par Git. La CI lance `gitleaks` sur tout l'historique.
+Jamais de mot de passe, token ou clé dans le dépôt (il est public) : uniquement dans `.env`, qui est ignoré par Git. La CI (Jenkins) lance `gitleaks` sur tout l'historique.
