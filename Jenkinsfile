@@ -1,4 +1,5 @@
-// CI Jenkins (jenkins.calixteair.fr) — mêmes étapes que .github/workflows/ci.yml.
+// CI/CD du projet, exécutée par Jenkins (jenkins.calixteair.fr) : seul outil de CI du dépôt.
+// Le statut « continuous-integration/jenkins/pr-merge » est obligatoire sur dev et main.
 // Les conteneurs lancés par le build tournent dans le démon Docker isolé « docker »
 // (Docker-in-Docker), pas sur l'agent : MySQL est donc joint via l'hôte « docker ».
 pipeline {
