@@ -6,9 +6,13 @@
 // Livraison (après les tests) :
 //   dev  → images :sha-<commit> et :staging sur GHCR → déploiement staging → contrôle de l'URL
 //   main → images :sha-<commit> → approbation manuelle (jenkins-admins) → :prod → déploiement prod
-// Les PR et les autres branches s'arrêtent aux tests.
+// Les PR s'arrêtent aux tests. Elles sont construites dans un dossier Jenkins à part (groupes-pr/),
+// sur un autre agent, sans aucun identifiant : seuls dev et main ont accès à GHCR et aux clés SSH.
+// Ce fichier, le Makefile, deploy/ et scripts/ sont sous CODEOWNERS (review de Calixteair).
 pipeline {
-  agent { label 'docker' }
+  // Pas d'agent global : l'attente de l'approbation de prod ne garde pas l'exécuteur
+  // (un seul pour tout le projet), les PR et dev peuvent tourner pendant ce temps.
+  agent none
 
   options {
     timeout(time: 60, unit: 'MINUTES')
@@ -19,99 +23,107 @@ pipeline {
   }
 
   environment {
-    DB_TEST_BIND = '0.0.0.0'
-    DB_TEST_HOST = 'docker'
-    // Les 2 exécuteurs partagent le même démon dind : un nom de projet Compose par
-    // exécuteur évite que deux builds simultanés se disputent conteneurs et volumes.
-    COMPOSE_PROJECT_NAME = "ai-jobs-ci-${env.EXECUTOR_NUMBER}"
     REGISTRY = 'ghcr.io/calixteair'
   }
 
   stages {
-    stage('Lint (ruff)') {
-      steps {
-        sh 'make lint'
+    stage('Tests et livraison') {
+      agent { label 'docker' }
+      environment {
+        DB_TEST_BIND = '0.0.0.0'
+        DB_TEST_HOST = 'docker'
+        // Si plusieurs exécuteurs partagent le démon dind : un nom de projet Compose par
+        // exécuteur évite que deux builds simultanés se disputent conteneurs et volumes.
+        COMPOSE_PROJECT_NAME = "ai-jobs-ci-${env.EXECUTOR_NUMBER}"
       }
-    }
+      stages {
+        stage('Lint (ruff)') {
+          steps {
+            sh 'make lint'
+          }
+        }
 
-    stage('Tests unitaires') {
-      steps {
-        sh 'make test'
-      }
-      post {
-        always { junit 'report.xml' }
-      }
-    }
+        stage('Tests unitaires') {
+          steps {
+            sh 'make test'
+          }
+          post {
+            always { junit 'report.xml' }
+          }
+        }
 
-    stage("Tests d'intégration MySQL") {
-      steps {
-        // Un port par exécuteur : deux branches peuvent tourner en parallèle sur le même démon
-        sh '''
-          export DB_TEST_PORT=$((3307 + EXECUTOR_NUMBER))
-          cp .env.example .env
-          make db-up
-          make test-int
-          make test-persistence
-        '''
-      }
-      post {
-        failure { sh 'docker compose -f compose.yaml -f compose.test.yaml logs db || true' }
-        always {
-          junit allowEmptyResults: true, testResults: 'report-integration.xml'
-          sh 'make db-reset || true'
+        stage("Tests d'intégration MySQL") {
+          steps {
+            // Un port par exécuteur : deux branches peuvent tourner en parallèle sur le même démon
+            sh '''
+              export DB_TEST_PORT=$((3307 + EXECUTOR_NUMBER))
+              cp .env.example .env
+              make db-up
+              make test-int
+              make test-persistence
+            '''
+          }
+          post {
+            failure { sh 'docker compose -f compose.yaml -f compose.test.yaml logs db || true' }
+            always {
+              junit allowEmptyResults: true, testResults: 'report-integration.xml'
+              sh 'make db-reset || true'
+            }
+          }
+        }
+
+        stage('Smoke tests T1 à T5') {
+          steps {
+            // Stack complète (app + db) construite depuis zéro, puis down -v.
+            // Port et nom de projet propres à l'exécuteur : deux builds peuvent tourner en parallèle.
+            sh '''
+              export SMOKE_HOST=docker
+              export APP_PORT=$((8601 + EXECUTOR_NUMBER))
+              export COMPOSE_PROJECT_NAME="ai-jobs-smoke-$EXECUTOR_NUMBER"
+              cp .env.example .env
+              make smoke
+            '''
+          }
+        }
+
+        stage('Scan de secrets (gitleaks)') {
+          steps {
+            // Chemin identique dans l'agent et dans dind : le montage $PWD fonctionne
+            sh 'docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 detect --source /repo --redact --verbose'
+          }
+        }
+
+        stage('Publication des images (GHCR)') {
+          when { anyOf { branch 'dev'; branch 'main' } }
+          steps {
+            withCredentials([usernamePassword(credentialsId: 'ghcr-push',
+                                              usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
+              // Identifiants Docker propres au build (pas dans le ~/.docker partagé de l'agent)
+              sh '''
+                export DOCKER_CONFIG="$WORKSPACE@tmp/docker-ghcr"
+                echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+                SHA=sha-$(git rev-parse --short=12 HEAD)
+                docker build -t "$REGISTRY/ai-jobs-docker-app:$SHA" .
+                docker build -t "$REGISTRY/ai-jobs-docker-db:$SHA" -f database/Dockerfile .
+                # GHCR refuse parfois la première écriture d'un package (création + liaison au dépôt) :
+                # une nouvelle tentative suffit.
+                push() { for i in 1 2 3; do docker push "$1" && return 0; sleep 5; done; return 1; }
+                push "$REGISTRY/ai-jobs-docker-app:$SHA"
+                push "$REGISTRY/ai-jobs-docker-db:$SHA"
+              '''
+            }
+          }
+          post { always { sh 'rm -rf "$WORKSPACE@tmp/docker-ghcr"' } }
+        }
+
+        stage('Déploiement staging') {
+          when { branch 'dev' }
+          steps { deployTo('staging', 'https://ai-jobs-staging.calixteair.fr') }
         }
       }
     }
 
-    stage('Smoke tests T1 à T5') {
-      steps {
-        // Stack complète (app + db) construite depuis zéro, puis down -v.
-        // Port et nom de projet propres à l'exécuteur : deux builds peuvent tourner en parallèle.
-        sh '''
-          export SMOKE_HOST=docker
-          export APP_PORT=$((8601 + EXECUTOR_NUMBER))
-          export COMPOSE_PROJECT_NAME="ai-jobs-smoke-$EXECUTOR_NUMBER"
-          cp .env.example .env
-          make smoke
-        '''
-      }
-    }
-
-    stage('Scan de secrets (gitleaks)') {
-      steps {
-        // Chemin identique dans l'agent et dans dind : le montage $PWD fonctionne
-        sh 'docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 detect --source /repo --redact --verbose'
-      }
-    }
-
-    stage('Publication des images (GHCR)') {
-      when { anyOf { branch 'dev'; branch 'main' } }
-      steps {
-        withCredentials([usernamePassword(credentialsId: 'ghcr-push',
-                                          usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
-          // Identifiants Docker propres au build (pas dans le ~/.docker partagé de l'agent)
-          sh '''
-            export DOCKER_CONFIG="$WORKSPACE@tmp/docker-ghcr"
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-            SHA=sha-$(git rev-parse --short=12 HEAD)
-            docker build -t "$REGISTRY/ai-jobs-docker-app:$SHA" .
-            docker build -t "$REGISTRY/ai-jobs-docker-db:$SHA" -f database/Dockerfile .
-            # GHCR refuse parfois la première écriture d'un package (création + liaison au dépôt) :
-            # une nouvelle tentative suffit.
-            push() { for i in 1 2 3; do docker push "$1" && return 0; sleep 5; done; return 1; }
-            push "$REGISTRY/ai-jobs-docker-app:$SHA"
-            push "$REGISTRY/ai-jobs-docker-db:$SHA"
-          '''
-        }
-      }
-      post { always { sh 'rm -rf "$WORKSPACE@tmp/docker-ghcr"' } }
-    }
-
-    stage('Déploiement staging') {
-      when { branch 'dev' }
-      steps { deployTo('staging', 'https://ai-jobs-staging.calixteair.fr') }
-    }
-
+    // Hors agent : aucun exécuteur occupé pendant l'attente
     stage('Approbation production') {
       when { branch 'main' }
       steps {
@@ -123,6 +135,7 @@ pipeline {
 
     stage('Déploiement production') {
       when { branch 'main' }
+      agent { label 'docker' }
       steps { deployTo('prod', 'https://ai-jobs.calixteair.fr') }
     }
   }
@@ -140,6 +153,9 @@ def deployTo(String envName, String url) {
       SHA=sha-\$(git rev-parse --short=12 HEAD)
       push() { for i in 1 2 3; do docker push "\$1" && return 0; sleep 5; done; return 1; }
       for image in ai-jobs-docker-app ai-jobs-docker-db; do
+        # Prod sur un nouvel exécuteur (après l'approbation) : l'image du commit vient de GHCR
+        # si le démon ne l'a plus
+        docker image inspect "\$REGISTRY/\$image:\$SHA" >/dev/null 2>&1 || docker pull "\$REGISTRY/\$image:\$SHA"
         docker tag "\$REGISTRY/\$image:\$SHA" "\$REGISTRY/\$image:${envName}"
         push "\$REGISTRY/\$image:${envName}"
       done
