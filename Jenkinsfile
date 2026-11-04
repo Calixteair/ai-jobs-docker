@@ -134,7 +134,11 @@ pipeline {
     }
 
     stage('Déploiement production') {
-      when { branch 'main' }
+      // Condition évaluée avant de prendre un exécuteur (sinon checkout inutile sur dev)
+      when {
+        beforeAgent true
+        branch 'main'
+      }
       agent { label 'docker' }
       steps { deployTo('prod', 'https://ai-jobs.calixteair.fr') }
     }
