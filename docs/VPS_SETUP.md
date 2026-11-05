@@ -10,7 +10,7 @@
 ```
 Jenkins (jenkins.calixteair.fr)                       VPS calixteair.fr (SSH :5485)
 ───────────────────────────────                       ─────────────────────────────
-push dev ─► tests ─► Harbor :app-staging, :db-staging ─► ssh ci-ai-jobs-staging ─► bao-deploy.sh ai-jobs-staging
+merge signé dans dev ─► tests ─► Harbor :app-sha-*, :db-sha-* ─► ssh ci-ai-jobs-staging ─► stack-sync ai-jobs-staging <commit>
 push main ─► tests ─► Harbor :app-latest, :db-latest      (pas de déploiement)
 tag vX.Y.Z signé ─► tests ─► Harbor :vX.Y.Z-app, :vX.Y.Z-db ─► ssh ci-ai-jobs ─► stack-sync ai-jobs vX.Y.Z
 
@@ -25,11 +25,11 @@ Navigateur ─► NPM (:443, réseau nginx-reverse-proxy) ─► ai-jobs[-stagin
 
 | | Staging | Production |
 |---|---|---|
-| Déclencheur | commit sur `dev` | tag `vX.Y.Z` signé par Calixteair (commit sur `main`) |
+| Déclencheur | commit sur `dev` signé par le bot de review ou Calixteair | tag `vX.Y.Z` signé par Calixteair (commit sur `main`) |
 | Stack / dossier | `projects/ai-jobs-staging/` | `projects/ai-jobs/` |
-| Fichiers du dépôt | `deploy/staging/compose.yaml` (copié à la main) | `deploy/prod/` (installés par `stack-sync`) |
+| Fichiers du dépôt | `deploy/staging/` (installés par `stack-sync`, mode commit) | `deploy/prod/` (installés par `stack-sync`) |
 | Utilisateur CI | `ci-ai-jobs-staging` | `ci-ai-jobs` |
-| Images | `:app-staging`, `:db-staging` | `:vX.Y.Z-app`, `:vX.Y.Z-db` (immuables) |
+| Images | `:app-sha-<commit>`, `:db-sha-<commit>` (épinglées par `stack-sync`) | `:vX.Y.Z-app`, `:vX.Y.Z-db` (immuables) |
 | Secrets OpenBao | `secret/ai-jobs/staging/mysql` | `secret/ai-jobs/prod/mysql` |
 | URL | `ai-jobs-staging.calixteair.fr` (basic auth) | `ai-jobs.calixteair.fr` |
 
@@ -48,7 +48,7 @@ Chaque commit publié a aussi ses images `:<préfixe>-sha-<commit>`. Le `compose
 ### 3.1 Fichiers de déploiement
 
 - `deploy/prod/compose.yaml` et `deploy/prod/agent.hcl` : installés par `stack-sync` à chaque release. Une modification passe par une PR, puis un tag.
-- `deploy/staging/compose.yaml` : copié à la main dans `projects/ai-jobs-staging/` après une modification (le staging n'est pas encore sur `stack-sync`).
+- `deploy/staging/compose.yaml` et `deploy/staging/agent.hcl` : installés par `stack-sync` (mode commit) à chaque commit de `dev`, s'il est signé par le bot de review (`review-bot@calixteair.fr`) ou par Calixteair. Un merge par le bouton de GitHub n'est jamais déployé.
 
 ### 3.2 Réinitialisation des données
 
@@ -75,6 +75,7 @@ Lus dans OpenBao par l'AppRole des projets de groupe (`secret/cicd/groupes/*` se
 | `cicd/groupes/ai-jobs/staging-deploy` | clé privée de `ci-ai-jobs-staging` (`ssh_key_b64`) |
 | `cicd/groupes/ai-jobs/staging-access` | compte de l'access list NPM du staging (`user`, `password`) |
 | `cicd/groupes/ai-jobs/deploy` | clé privée de `ci-ai-jobs` (`ssh_key_b64`) |
+| `cicd/groupes/ai-jobs/reviewer` | bot de review : clé OpenRouter (`openrouter_key`, plafonnée) et clé SSH de signature des merges (`ssh_key_b64`) |
 
 Les builds de PR (dossier Jenkins `groupes-pr/`) n'ont accès à aucun de ces chemins.
 

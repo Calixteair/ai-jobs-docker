@@ -57,8 +57,11 @@ Exemples : `feat(app): filtres pays et secteur`, `fix(db): healthcheck en TCP`.
 
 1. `make lint test` passe en local.
 2. PR vers `dev`, description remplie (le modèle s'affiche automatiquement), `Closes #<n°>`.
-3. Carte en **In review**, un autre membre relit et approuve. Si la PR touche `Jenkinsfile`, `Makefile`, `deploy/`, `scripts/` ou `compose*.yaml`, GitHub demande en plus la review de Calixteair (`.github/CODEOWNERS`) : ces fichiers s'exécutent dans la CI de `dev` et `main`, qui a les accès de déploiement.
-4. CI verte et conversations résolues → merge, la branche est supprimée automatiquement.
+3. Carte en **In review**. Une fois la CI verte, le **bot de review** (`calixteair-reviewer`) relit la PR en quelques minutes avec un modèle de langage et poste sa review :
+   - **approuvée** : le bot merge lui-même dans `dev` (commit signé), puis le staging est redéployé ;
+   - **changements demandés** : corriger et pousser, le bot relit le nouveau commit ;
+   - **commentaire sans merge** : la PR touche un chemin de `.github/CODEOWNERS` (`Jenkinsfile`, `Makefile`, `deploy/`, `scripts/`, `compose*.yaml`, `.github/`), ou le diff est trop long : review de Calixteair obligatoire.
+4. Personne ne merge dans `dev` à la main : seul un commit signé par le bot ou par Calixteair part en staging. Une relecture entre membres reste bienvenue (commentaires, questions) avant que le bot passe.
 
 ### CI : Jenkins
 

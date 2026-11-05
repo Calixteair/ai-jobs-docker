@@ -1,9 +1,10 @@
 # Fichiers exécutés par Jenkins sur dev et main, là où le build a les identifiants de livraison
 # (GHCR, clés de déploiement staging et prod) : une PR qui les modifie demande la review de
-# Calixteair (ruleset « review de code owner » sur dev et main). Le reste du code se relit entre nous.
+# Calixteair (ruleset « review de code owner » sur dev et main). Le bot de review ne merge jamais une PR
+# qui touche ces chemins (il lit ce fichier sur dev) ; .github/ couvre aussi REVIEW.md, ses consignes.
 /Jenkinsfile          @Calixteair
 /Makefile             @Calixteair
 /deploy/              @Calixteair
 /scripts/             @Calixteair
 /compose*.yaml        @Calixteair
-/.github/CODEOWNERS   @Calixteair
+/.github/             @Calixteair
