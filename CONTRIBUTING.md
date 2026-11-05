@@ -57,12 +57,15 @@ Exemples : `feat(app): filtres pays et secteur`, `fix(db): healthcheck en TCP`.
 
 1. `make lint test` passe en local.
 2. PR vers `dev`, description remplie (le modèle s'affiche automatiquement), `Closes #<n°>`.
-3. Carte en **In review**, un autre membre relit et approuve.
+3. Carte en **In review**, un autre membre relit et approuve. Si la PR touche `Jenkinsfile`, `Makefile`, `deploy/`, `scripts/` ou `compose*.yaml`, GitHub demande en plus la review de Calixteair (`.github/CODEOWNERS`) : ces fichiers s'exécutent dans la CI de `dev` et `main`, qui a les accès de déploiement.
 4. CI verte et conversations résolues → merge, la branche est supprimée automatiquement.
 
 ### CI : Jenkins
 
-La CI tourne sur [jenkins.calixteair.fr](https://jenkins.calixteair.fr) (connexion Keycloak avec le compte fourni par l'équipe DevOps), dossier **Calixteair → ai-jobs-docker** : un job par branche et par PR.
+La CI tourne sur [jenkins.calixteair.fr](https://jenkins.calixteair.fr) (connexion Keycloak avec le compte fourni par l'équipe DevOps), deux dossiers :
+
+- **PR des projets de groupe → Calixteair → ai-jobs-docker** : un job par PR (tests seulement, sans aucun accès de déploiement) ;
+- **Projets de groupe → Calixteair → ai-jobs-docker** : les branches `dev` (images + staging), `main` (images) et les tags `vX.Y.Z` signés par Calixteair (prod).
 
 - Étapes : lint (ruff), tests unitaires, tests d'intégration MySQL + T7, scan de secrets (gitleaks). Mêmes commandes qu'en local : `make lint test test-int`.
 - Le statut remonte sur la PR (`continuous-integration/jenkins/pr-merge`) : il est **obligatoire** pour merger dans `dev` et `main`. Le lien *Details* ouvre le build (logs, rapports de tests).
