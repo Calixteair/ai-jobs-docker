@@ -13,3 +13,9 @@ LABEL org.opencontainers.image.source="https://github.com/Calixteair/ai-jobs-doc
 # Exécutés par ordre alphabétique au premier démarrage, si le volume est vide.
 # Les scripts de schéma et d'import sont fournis par la zone data.
 COPY database/scripts_initialisation/ /docker-entrypoint-initdb.d/
+
+# Durcissement (Trivy, CRITICAL) : MySQL Shell (mysqlsh, avec son propre Python et certifi) ne sert
+# pas ici, et gosu (compilé avec un Go vulnérable) ne sert qu'à passer de root à mysql. En lançant
+# directement en mysql, l'entrypoint officiel ne l'appelle plus : on peut le supprimer.
+RUN rpm -e mysql-shell && rm -f /usr/local/bin/gosu
+USER mysql
