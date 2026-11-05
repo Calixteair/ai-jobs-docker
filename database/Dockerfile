@@ -7,7 +7,7 @@
 # 8.4 = version LTS (support long terme), épinglée pour un build reproductible.
 FROM mysql:8.4
 
-# Relie le package GHCR au dépôt (affiché sur la page du dépôt, description et licence)
+# Lien vers le dépôt source (affiché par Harbor et les outils OCI)
 LABEL org.opencontainers.image.source="https://github.com/Calixteair/ai-jobs-docker"
 
 # Exécutés par ordre alphabétique au premier démarrage, si le volume est vide.

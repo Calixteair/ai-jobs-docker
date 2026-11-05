@@ -1,0 +1,56 @@
+# Compose du staging sur le VPS (ai-jobs-staging.calixteair.fr, derrière l'access list NPM).
+# Images publiées par Jenkins sur Harbor à chaque commit de dev (:<préfixe>-staging), aucun build,
+# aucun port publié. Les variables MYSQL_* viennent de /run/ai-jobs-staging/.env, rendu par bao-agent
+# (OpenBao secret/ai-jobs/staging/mysql) ; bao-deploy.sh fait pull + up -d.
+name: ai-jobs-staging
+
+services:
+  db:
+    # mysql:8.4 + scripts d'initialisation embarqués (bao-deploy.sh ne copie aucun fichier)
+    image: registry.calixteair.fr/ai-jobs/ai-jobs:db-staging
+    container_name: ai-jobs-staging-db
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?err}
+      MYSQL_USER: ${MYSQL_USER:?err}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?err}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?err}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u $$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    mem_limit: 512m
+    restart: unless-stopped
+
+  app:
+    image: registry.calixteair.fr/ai-jobs/ai-jobs:app-staging
+    container_name: ai-jobs-staging-app
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE:?err}
+      DB_USER: ${MYSQL_USER:?err}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?err}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+      # Joint par Nginx Proxy Manager sous le nom ai-jobs-staging-app:8501
+      - nginx-reverse-proxy
+    mem_limit: 512m
+    restart: unless-stopped
+    # Aucun port publié : accès uniquement via NPM (WebSockets activés)
+
+volumes:
+  mysql_data:
+
+networks:
+  internal:
+  nginx-reverse-proxy:
+    external: true

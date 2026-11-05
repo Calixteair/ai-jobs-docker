@@ -65,7 +65,7 @@ Exemples : `feat(app): filtres pays et secteur`, `fix(db): healthcheck en TCP`.
 La CI tourne sur [jenkins.calixteair.fr](https://jenkins.calixteair.fr) (connexion Keycloak avec le compte fourni par l'équipe DevOps), deux dossiers :
 
 - **PR des projets de groupe → Calixteair → ai-jobs-docker** : un job par PR (tests seulement, sans aucun accès de déploiement) ;
-- **Projets de groupe → Calixteair → ai-jobs-docker** : les branches `dev` (images + staging) et `main` (images + prod après approbation).
+- **Projets de groupe → Calixteair → ai-jobs-docker** : les branches `dev` (images + staging), `main` (images) et les tags `vX.Y.Z` signés par Calixteair (prod).
 
 - Étapes : lint (ruff), tests unitaires, tests d'intégration MySQL + T7, scan de secrets (gitleaks). Mêmes commandes qu'en local : `make lint test test-int`.
 - Le statut remonte sur la PR (`continuous-integration/jenkins/pr-merge`) : il est **obligatoire** pour merger dans `dev` et `main`. Le lien *Details* ouvre le build (logs, rapports de tests).
