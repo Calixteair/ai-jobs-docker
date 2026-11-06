@@ -83,7 +83,7 @@ Les builds de PR (dossier Jenkins `groupes-pr/`) n'ont accès à aucun de ces ch
 
 - [ ] PR vers `dev` verte → review du bot → merge dans `dev`, commit signé par le bot
 - [ ] Build de `dev` → images `:app-sha-<commit>` et `:db-sha-<commit>` sur Harbor
-- [ ] `stack-sync ai-jobs-staging <commit>` → staging redéployé → `/_stcore/health` 200
+- [ ] `stack-sync ai-jobs-staging <commit>` (lancé par Jenkins, `<commit>` = merge du bot sur `dev`, voir §1 et §3.1) → staging redéployé → `/_stcore/health` 200
 - [ ] Merge par le bouton de GitHub sur `dev` → `stack-sync` refuse (signature web-flow), le staging ne bouge pas
 - [ ] Merge `dev` → `main` → images `:*-latest`, aucun déploiement
 - [ ] Tag signé `vX.Y.Z` → prod déployée, `journalctl -t stack-sync` trace le déploiement
