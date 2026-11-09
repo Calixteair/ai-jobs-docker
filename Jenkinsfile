@@ -9,7 +9,7 @@
 //   main        → :<préfixe>-sha-<commit> et :<préfixe>-latest, sans déploiement
 //   tag vX.Y.Z  → :vX.Y.Z-<préfixe> (immuables) → déploiement prod par stack-sync, qui vérifie sur le VPS
 //                 que le tag est signé par Calixteair (un tag non signé est refusé)
-// Préfixes : app (Streamlit) et db (MySQL + scripts d'initialisation).
+// Préfixes : app (Streamlit), db (MySQL + scripts d'initialisation) et gateway (gateway LLM).
 // Les PR s'arrêtent aux tests. Elles sont construites dans un dossier Jenkins à part (groupes-pr/),
 // sur un autre agent, sans aucun identifiant : seuls dev, main et les tags ont accès à Harbor et aux clés.
 // Ce fichier, le Makefile, deploy/ et scripts/ sont sous CODEOWNERS (review de Calixteair).
@@ -20,7 +20,8 @@ import fr.calixteair.ci.Refs
 def BAO = [harbor: 'cicd/groupes/harbor/ai-jobs', staging: 'cicd/groupes/ai-jobs/staging-deploy',
            stagingAccess: 'cicd/groupes/ai-jobs/staging-access', prod: 'cicd/groupes/ai-jobs/deploy']
 def IMAGES = [[name: 'ai-jobs', tagPrefix: 'app', context: '.', dockerfile: 'Dockerfile'],
-              [name: 'ai-jobs', tagPrefix: 'db', context: '.', dockerfile: 'database/Dockerfile']]
+              [name: 'ai-jobs', tagPrefix: 'db', context: '.', dockerfile: 'database/Dockerfile'],
+              [name: 'ai-jobs', tagPrefix: 'gateway', context: '.', dockerfile: 'gateway/Dockerfile']]
 def built = []
 
 pipeline {

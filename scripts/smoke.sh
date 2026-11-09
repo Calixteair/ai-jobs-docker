@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 # Smoke tests T1 à T5 (sujet §12) sur la stack complète, depuis zéro.
-#   T1 build des images · T2 démarrage · T3 état (healthchecks) · T4 accès web · T5 connexion app → base
+#   T1 build des images · T2 démarrage · T3 état (healthchecks) · T4 accès web · T5 connexion app → base et gateway
 #
 # Variables : SMOKE_HOST (défaut localhost ; « docker » en CI Jenkins, où les
 # conteneurs tournent dans dind), APP_PORT (défaut 8501), KEEP_STACK=1 pour ne
-# pas supprimer la stack à la fin. COMPOSE_PROJECT_NAME isole deux exécutions.
+# pas supprimer la stack à la fin, SMOKE_PROFILES=ia pour inclure Ollama.
+# COMPOSE_PROJECT_NAME isole deux exécutions.
 set -euo pipefail
 
 HOST=${SMOKE_HOST:-localhost}
 PORT=${APP_PORT:-8501}
 EXPECTED_JOBS=1500
 COMPOSE=(docker compose)
+# Profil « ia » exclu par défaut, même si .env l'active : pas de téléchargement de 5 Go
+export COMPOSE_PROFILES="${SMOKE_PROFILES:-}"
 
 step() { echo "[$1] $2"; }
 fail() { echo "[$1] ÉCHEC : $2" >&2; "${COMPOSE[@]}" logs --tail=50 >&2 || true; exit 1; }
@@ -24,7 +27,7 @@ step T2 "Démarrage de la stack (attente des healthchecks)"
 "${COMPOSE[@]}" up -d --wait --wait-timeout 180 || fail T2 "la stack ne démarre pas"
 
 step T3 "État des conteneurs"
-for svc in app db; do
+for svc in app db gateway; do
   state=$("${COMPOSE[@]}" ps --format '{{.Health}}' "$svc")
   [[ "$state" == "healthy" ]] || fail T3 "$svc est « $state »"
   echo "     $svc : $state"
@@ -65,5 +68,13 @@ elif [[ "$jobs" != "$EXPECTED_JOBS" ]]; then
 else
   echo "     $jobs offres en base"
 fi
+
+step T5 "Connexion de l'application à la gateway LLM (par le nom de service)"
+# La gateway répond même sans aucun backend IA : on vérifie le chemin app → gateway, pas le modèle.
+backends=$("${COMPOSE[@]}" exec -T app python -c '
+import os, urllib.request
+print(urllib.request.urlopen(os.environ["LLM_GATEWAY_URL"] + "/v1/backends", timeout=5).read().decode())
+') || fail T5 "gateway injoignable depuis l'app"
+echo "     gateway : $backends"
 
 echo "[OK] T1 à T5 validés"
