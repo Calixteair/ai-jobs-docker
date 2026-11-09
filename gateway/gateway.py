@@ -9,6 +9,7 @@ La réponse du backend (streaming compris) est relayée telle quelle, avec l'en-
 """
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -22,6 +23,8 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 
 MODES = ("auto", "ollama", "openrouter")
+# Largement assez pour une conversation : au-delà, 413 plutôt que tout charger en mémoire
+MAX_BODY_BYTES = 1_000_000
 log = logging.getLogger("gateway")
 
 
@@ -215,8 +218,15 @@ def create_app(
 
     @app.post("/v1/chat/completions")
     async def chat(request: Request):
+        if int(request.headers.get("content-length") or 0) > MAX_BODY_BYTES:
+            return error(413, "requête trop volumineuse")
+        raw = b""
+        async for chunk in request.stream():
+            raw += chunk
+            if len(raw) > MAX_BODY_BYTES:
+                return error(413, "requête trop volumineuse")
         try:
-            body = await request.json()
+            body = json.loads(raw)
         except ValueError:
             return error(400, "corps JSON invalide")
         if not isinstance(body, dict) or not isinstance(body.get("messages"), list):

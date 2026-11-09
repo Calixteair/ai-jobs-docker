@@ -11,15 +11,28 @@ from gateway import OllamaProbe, Settings, create_app
 OLLAMA = "http://pc:11434"
 OPENROUTER = "https://or.test/api/v1"
 MESSAGES = [{"role": "user", "content": "bonjour"}]
+SSE_CHUNKS = [b'data: {"choices":[{"delta":{"content":"Pa"}}]}\n\n', b"data: [DONE]\n\n"]
+
+
+class SseStream(httpx.AsyncByteStream):
+    """Réponse SSE découpée en morceaux, comme un vrai flux Ollama."""
+
+    def __init__(self, chunks: list[bytes]):
+        self.chunks = chunks
+
+    async def __aiter__(self):
+        for chunk in self.chunks:
+            yield chunk
 
 
 class FakeBackends:
     """Ollama et OpenRouter simulés ; chaque appel est enregistré."""
 
-    def __init__(self, ollama_up=True, model_installed=True, ollama_chat_status=200):
+    def __init__(self, ollama_up=True, model_installed=True, ollama_chat_status=200, sse=False):
         self.ollama_up = ollama_up
         self.model_installed = model_installed
         self.ollama_chat_status = ollama_chat_status
+        self.sse = sse
         self.sent: list[httpx.Request] = []
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
@@ -35,6 +48,10 @@ class FakeBackends:
         if url.endswith("/api/tags"):
             models = [{"name": "qwen3:8b"}] if self.model_installed else []
             return httpx.Response(200, json={"models": models})
+        if self.sse:
+            return httpx.Response(
+                200, headers={"content-type": "text/event-stream"}, stream=SseStream(SSE_CHUNKS)
+            )
         return httpx.Response(self.ollama_chat_status, json={"backend": "ollama"})
 
     @property
@@ -53,7 +70,7 @@ class Clock:
         return self.now
 
 
-def make_client(backends: FakeBackends, key="sk-test", clock=None) -> TestClient:
+def make_client(backends: FakeBackends, key="fake-key-for-tests", clock=None) -> TestClient:
     settings = Settings(
         ollama_url=OLLAMA,
         ollama_model="qwen3:8b",
@@ -131,7 +148,7 @@ def test_real_model_and_key_are_set_by_the_gateway():
     backends = FakeBackends()
     chat(make_client(backends), "openrouter", temperature=0.2)
     sent = backends.sent[-1]
-    assert sent.headers["Authorization"] == "Bearer sk-test"
+    assert sent.headers["Authorization"] == "Bearer fake-key-for-tests"
     assert b'"model":"vendor/model"' in sent.content
     assert b'"temperature":0.2' in sent.content
 
@@ -175,3 +192,16 @@ def test_concurrent_requests_share_one_probe():
 
     assert asyncio.run(burst()) == [True] * 5
     assert backends.count("/api/tags") == 1
+
+
+def test_sse_stream_is_relayed_unchanged():
+    resp = chat(make_client(FakeBackends(sse=True)), "ollama", stream=True)
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/event-stream")
+    assert resp.content == b"".join(SSE_CHUNKS)
+
+
+def test_oversized_body_is_413():
+    huge = [{"role": "user", "content": "x" * 1_100_000}]
+    resp = make_client(FakeBackends()).post("/v1/chat/completions", json={"messages": huge})
+    assert resp.status_code == 413
