@@ -1,5 +1,6 @@
 # Outillage de développement et de test (pas installé dans les images Docker).
 -r requirements.txt
+-r gateway/requirements.txt
 
 pytest==8.3.4
 pytest-cov==6.0.0
