@@ -19,6 +19,22 @@ docker compose up --build
 # http://localhost:8501
 ```
 
+## Assistant IA (gateway LLM)
+
+L'app n'appelle jamais un modèle directement : elle passe par le service `gateway`
+(API compatible OpenAI, `POST http://gateway:8000/v1/chat/completions`), avec un **mode** dans `model` :
+
+| Mode | Comportement |
+|---|---|
+| `auto` (défaut) | Ollama s'il est disponible, sinon OpenRouter |
+| `ollama` | Ollama uniquement ; indisponible → 503, aucun traitement |
+| `openrouter` | OpenRouter directement (nécessite `OPENROUTER_API_KEY`) |
+
+- `GET /v1/backends` donne l'état des deux backends ; l'en-tête `X-LLM-Backend` indique qui a répondu.
+- En local, `COMPOSE_PROFILES=ia` (dans `.env`) démarre un conteneur Ollama avec `qwen2.5:0.5b`.
+  **Premier démarrage long** (~9 min mesurées : image Ollama de 5 Go + modèle de 400 Mo), puis tout reste en cache.
+- Sans IA : `COMPOSE_PROFILES=` dans `.env`. Le dashboard démarre normalement, la gateway répond 503.
+
 ## Workflow Git
 
 `feature/<issue>-<slug>` → PR vers `dev` (staging) → PR vers `main` (production). Détails dans le [cadrage §6](docs/CADRAGE.md#6-stratégie-git).

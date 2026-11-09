@@ -12,6 +12,8 @@ services:
       DB_NAME: ${MYSQL_DATABASE:?Variable manquante, voir .env.example}
       DB_USER: ${MYSQL_USER:?Variable manquante, voir .env.example}
       DB_PASSWORD: ${MYSQL_PASSWORD:?Variable manquante, voir .env.example}
+      # L'app ne parle qu'à la gateway, qui choisit le modèle (modes auto / ollama / openrouter)
+      LLM_GATEWAY_URL: http://gateway:8000
     ports:
       # Seul port publié de la stack
       - "${APP_PORT:-8501}:8501"
@@ -49,8 +51,61 @@ services:
     restart: unless-stopped
     # Aucun port publié : seule l'application, sur le réseau backend, y accède.
 
+  gateway:
+    # Gateway LLM : Ollama s'il est disponible, sinon OpenRouter (si une clé est fournie).
+    # L'app n'en dépend pas au démarrage : sans IA, le dashboard fonctionne quand même.
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    image: ai-jobs-gateway:local
+    environment:
+      # Vide = valeur par défaut de gateway/gateway.py (Settings)
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
+    networks:
+      - backend
+    restart: unless-stopped
+    # Aucun port publié
+
+  ollama:
+    # Petit modèle local (profil « ia », activé par COMPOSE_PROFILES dans .env) : le projet reste
+    # autonome sans clé d'API. Le modèle est téléchargé au premier démarrage puis gardé dans le volume.
+    image: ollama/ollama:0.40.11
+    profiles: [ia]
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        ollama serve & pid=$$!
+        until ollama list >/dev/null 2>&1; do sleep 1; done
+        # Téléchargé une seule fois ; un échec arrête le conteneur (erreur visible, nouvel essai au redémarrage)
+        ollama show "$$OLLAMA_MODEL" >/dev/null 2>&1 || ollama pull "$$OLLAMA_MODEL" || exit 1
+        wait $$pid
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:0.5b}
+      OLLAMA_NUM_PARALLEL: 1
+      OLLAMA_KEEP_ALIVE: 5m
+    volumes:
+      - ollama_models:/root/.ollama
+    networks:
+      - backend
+    healthcheck:
+      # Sain une fois le modèle téléchargé (premier démarrage : quelques minutes selon la connexion)
+      test: ["CMD-SHELL", "ollama show \"$$OLLAMA_MODEL\" >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 30s
+    cpus: 2
+    mem_limit: 2g
+    restart: unless-stopped
+    # Port 11434 non publié : seule la gateway l'appelle
+
 volumes:
   mysql_data:
+  ollama_models:
 
 networks:
   backend:

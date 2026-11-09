@@ -11,6 +11,10 @@ REQUIRED = {
     "DB_HOST",
     "DB_PORT",
     "APP_PORT",
+    "OLLAMA_URL",
+    "OLLAMA_MODEL",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_MODEL",
 }
 
 
@@ -33,3 +37,7 @@ def test_passwords_are_placeholders():
     env = read_env(ENV_EXAMPLE)
     for key in ("MYSQL_PASSWORD", "MYSQL_ROOT_PASSWORD"):
         assert env[key].startswith("change-me"), f"{key} doit rester une valeur factice"
+
+
+def test_openrouter_key_is_empty():
+    assert read_env(ENV_EXAMPLE)["OPENROUTER_API_KEY"] == "", "aucune vraie clé dans .env.example"
