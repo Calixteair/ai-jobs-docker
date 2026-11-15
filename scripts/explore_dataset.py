@@ -1,8 +1,8 @@
-"""Exploration du dataset AI Jobs Market (issues #9 et #10, sujet Phase 1 points 1 à 5).
+"""Exploration du dataset AI Jobs Market (issues #9 à #11, sujet Phase 1 points 1 à 6).
 
-Contrôle les dimensions, les valeurs manquantes, les doublons, les types et le
-format des compétences (`required_skills`) du CSV brut, puis écrit les résultats
-chiffrés dans docs/data/exploration_dataset.md.
+Contrôle les dimensions, les valeurs manquantes, les doublons, les types, le format
+des compétences (`required_skills`) et la cohérence métier du CSV brut, puis écrit
+les résultats chiffrés dans docs/data/exploration_dataset.md.
 
 Le rapport est entièrement régénéré à chaque exécution : ne pas l'éditer à la main.
 Le sens de chaque variable est décrit dans docs/data/dictionnaire_donnees.md et
@@ -93,6 +93,31 @@ SIMILAR_SKILLS = [
     ("Prompt Engineering", "Prompt Design"),
     ("ML", "ML Algorithms"),
 ]
+
+# Tranches d'années correspondant à chaque libellé de niveau
+EXPERIENCE_YEARS = {
+    "Entry (0-2 yrs)": (0, 2),
+    "Mid (3-5 yrs)": (3, 5),
+    "Senior (6-9 yrs)": (6, 9),
+    "Lead (10+ yrs)": (10, 100),
+}
+
+# Bornes de salary_tier, déduites des libellés (borne haute incluse)
+SALARY_TIERS = {
+    "Entry (<$100k)": (0, 100_000),
+    "Mid ($100-150k)": (100_001, 150_000),
+    "Upper-Mid ($150-200k)": (150_001, 200_000),
+    "Senior ($200-300k)": (200_001, 300_000),
+    "Elite (>$300k)": (300_001, 10**9),
+}
+
+DERIVED_LABELS = {
+    "is_senior": "`is_senior` = 1 exactement pour les niveaux Senior et Lead",
+    "is_remote_friendly": "`is_remote_friendly` = 1 exactement pour Hybrid et Fully Remote",
+    "salary_tier": "`salary_tier` correspond à la tranche de `annual_salary_usd`",
+    "is_llm_role": "`is_llm_role` est le même pour toutes les offres d'un `job_title`",
+    "job_category": "`job_category` est la même pour toutes les offres d'un `job_title`",
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -342,6 +367,100 @@ def similar_skills(skills: pd.Series, pairs: list[tuple[str, str]]) -> pd.DataFr
 
 
 # --------------------------------------------------------------------------- #
+# Cohérence métier (issue #11)
+# --------------------------------------------------------------------------- #
+
+
+def salary_range_stats(df: pd.DataFrame) -> dict[str, int | float]:
+    """Position de annual_salary_usd par rapport à [salary_min_usd, salary_max_usd]."""
+    salary, low, high = df["annual_salary_usd"], df["salary_min_usd"], df["salary_max_usd"]
+    ranges_per_title = df.groupby("job_title")[["salary_min_usd", "salary_max_usd"]].nunique()
+    ratio = salary / high
+    return {
+        "above": int((salary > high).sum()),
+        "below": int((salary < low).sum()),
+        "one_range_per_title": bool((ranges_per_title == 1).all().all()),
+        "max_ratio": round(float(ratio.max()), 4),
+        "at_max_ratio": int((ratio.round(6) == ratio.max().round(6)).sum()),
+    }
+
+
+def above_range_by_level(df: pd.DataFrame) -> pd.DataFrame:
+    """Offres au-dessus de la fourchette, par niveau d'expérience (ordre Entry → Lead)."""
+    above = df["annual_salary_usd"] > df["salary_max_usd"]
+    grouped = above.groupby(df["experience_level"]).agg(["sum", "mean"])
+    grouped = grouped.reindex(list(EXPERIENCE_YEARS))
+    return pd.DataFrame(
+        {
+            "experience_level": grouped.index,
+            "offres au-dessus": grouped["sum"].astype(int).to_numpy(),
+            "% du niveau": (100 * grouped["mean"]).round(1).to_numpy(),
+        }
+    )
+
+
+def experience_consistency(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """Niveau annoncé vs années demandées : tableau croisé et nombre d'offres cohérentes."""
+    bands = {"Entry (0-2 yrs)": "0-2", "Mid (3-5 yrs)": "3-5", "Senior (6-9 yrs)": "6-9",
+             "Lead (10+ yrs)": "10+"}  # fmt: skip
+    years = df["years_of_experience"]
+    band = pd.Series("", index=df.index)
+    for level, (low, high) in EXPERIENCE_YEARS.items():
+        band[years.between(low, high)] = bands[level]
+    coherent = int((band == df["experience_level"].map(bands)).sum())
+    # Ordre logique Entry → Lead, en ne gardant que les niveaux présents
+    levels = [level for level in EXPERIENCE_YEARS if level in set(df["experience_level"])]
+    table = pd.crosstab(df["experience_level"], band).reindex(
+        index=levels, columns=list(bands.values()), fill_value=0
+    )
+    table.insert(0, "années moyennes", df.groupby("experience_level")[years.name].mean().round(1))
+    table.insert(1, "salaire moyen", df.groupby("experience_level")["annual_salary_usd"].mean())
+    table["salaire moyen"] = table["salaire moyen"].round().astype(int)
+    table.insert(0, "experience_level", table.index)
+    return table.reset_index(drop=True), coherent
+
+
+def derived_checks(df: pd.DataFrame) -> dict[str, bool]:
+    """Les colonnes dérivées sont-elles cohérentes avec leur colonne source ?"""
+    expected_tier = pd.Series("", index=df.index)
+    for tier, (low, high) in SALARY_TIERS.items():
+        expected_tier[df["annual_salary_usd"].between(low, high)] = tier
+    per_title = df.groupby("job_title")
+    return {
+        "is_senior": bool(
+            (df["is_senior"] == df["experience_level"].str.match("Senior|Lead")).all()
+        ),
+        "is_remote_friendly": bool(
+            (df["is_remote_friendly"] == (df["remote_work"] != "On-site")).all()
+        ),
+        "salary_tier": bool((expected_tier == df["salary_tier"]).all()),
+        "is_llm_role": bool((per_title["is_llm_role"].nunique() == 1).all()),
+        "job_category": bool((per_title["job_category"].nunique() == 1).all()),
+    }
+
+
+def time_distribution(df: pd.DataFrame) -> pd.DataFrame:
+    """Volume d'offres par année : nombre de mois couverts et moyenne mensuelle."""
+    per_year = df.groupby("posting_year").agg(
+        offres=("job_id", "size"), mois=("posting_month", "nunique")
+    )
+    per_year["% des offres"] = (100 * per_year["offres"] / len(df)).round(1)
+    per_year["offres par mois"] = (per_year["offres"] / per_year["mois"]).round(1)
+    return per_year.rename_axis("année").reset_index()
+
+
+def global_offers(df: pd.DataFrame) -> dict[str, object]:
+    """Offres sans pays précis (country = Global)."""
+    is_global = df["country"] == "Global"
+    return {
+        "count": int(is_global.sum()),
+        "cities": sorted(df.loc[is_global, "city"].unique()),
+        "remote_city_elsewhere": int(((df["city"] == "Remote") & ~is_global).sum()),
+        "modes": df.loc[is_global, "remote_work"].value_counts().to_dict(),
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Rapport Markdown
 # --------------------------------------------------------------------------- #
 
@@ -406,6 +525,13 @@ def build_report(source: Path) -> str:
     with_slash = sorted(name for name in names if "/" in name)
     links = int(sizes.loc[sizes["listes"] == "après dédoublonnage", "total"].iloc[0])
 
+    salary_range = salary_range_stats(df)
+    experience_table, coherent_levels = experience_consistency(df)
+    derived = derived_checks(df)
+    years_table = time_distribution(df)
+    worldwide = global_offers(df)
+    salary_years_corr = round(float(df["annual_salary_usd"].corr(df["years_of_experience"])), 2)
+
     def count_anomalies(results: dict[str, int]) -> str:
         found = sum(1 for count in results.values() if count)
         return f"**{found} anomalie(s)** sur {len(results)} contrôles"
@@ -433,6 +559,10 @@ def build_report(source: Path) -> str:
             f"- Compétences : **{len(names)} distinctes**, format : "
             f"{count_anomalies(skill_format)}, **{repetitions['offers']} offres** avec une "
             "compétence répétée",
+            f"- Cohérence : **{salary_range['above']} salaires** au-dessus de leur fourchette, "
+            f"niveau et années d'expérience cohérents pour **{coherent_levels} offres** "
+            f"sur {len(df)}, colonnes dérivées : "
+            f"**{sum(not ok for ok in derived.values())} incohérence(s)** sur {len(derived)}",
             "",
             "## 1. Dimensions et colonnes",
             "",
@@ -526,6 +656,52 @@ def build_report(source: Path) -> str:
             md_table(similar_skills(skills, SIMILAR_SKILLS)),
             "",
             "Décisions de traitement : [décisions de nettoyage](decisions_nettoyage.md).",
+            "",
+            "## 7. Cohérence métier",
+            "",
+            "### 7.1 Salaire annuel et fourchette",
+            "",
+            f"- `annual_salary_usd` au-dessus de `salary_max_usd` : **{salary_range['above']}** "
+            f"offres ({salary_range['above'] / len(df):.1%}) ; en dessous de `salary_min_usd` : "
+            f"**{salary_range['below']}**.",
+            "- Fourchette identique pour toutes les offres d'un même `job_title` : "
+            f"**{'oui' if salary_range['one_range_per_title'] else 'non'}**.",
+            f"- Le salaire ne dépasse jamais {salary_range['max_ratio']} × `salary_max_usd`, et "
+            f"**{salary_range['at_max_ratio']} offres** sont exactement à ce plafond.",
+            "",
+            md_table(above_range_by_level(df)),
+            "",
+            "### 7.2 Niveau et années d'expérience",
+            "",
+            "Années demandées dans la tranche annoncée par le niveau : "
+            f"**{coherent_levels} offres** sur {len(df)} ({coherent_levels / len(df):.1%}). "
+            f"Corrélation entre salaire et années d'expérience : **{salary_years_corr}**.",
+            "",
+            md_table(experience_table),
+            "",
+            "### 7.3 Colonnes dérivées",
+            "",
+            md_table(
+                pd.DataFrame(
+                    {
+                        "Contrôle": [DERIVED_LABELS[key] for key in derived],
+                        "Statut": ["✅" if ok else "⚠️" for ok in derived.values()],
+                    }
+                )
+            ),
+            "",
+            "### 7.4 Répartition dans le temps",
+            "",
+            md_table(years_table),
+            "",
+            "### 7.5 Offres sans pays (`country = Global`)",
+            "",
+            f"- **{worldwide['count']} offres**, toutes avec la ville "
+            f"{', '.join(f'`{c}`' for c in worldwide['cities'])} ; "
+            f"`Remote` n'apparaît dans aucun autre pays ({worldwide['remote_city_elsewhere']}).",
+            "- Mode de travail de ces offres : "
+            + ", ".join(f"{mode} {n}" for mode, n in worldwide["modes"].items())
+            + ".",
             "",
             f"## Annexe — fréquence des {len(names)} compétences",
             "",
