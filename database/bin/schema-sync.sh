@@ -13,7 +13,20 @@ log() { echo "[schema-sync] $*"; }
 # TCP (-h 127.0.0.1) : pendant l'init, MySQL tourne sans réseau, on attend donc le vrai serveur
 sql() { mysql -h 127.0.0.1 -uroot --database="$MYSQL_DATABASE" "$@"; }
 
-until mysqladmin ping -h 127.0.0.1 -uroot --silent 2>/dev/null; do sleep 1; done
+# Init d'un volume neuf comprise ; au-delà, le conteneur reste unhealthy avec ce message
+WAIT_MAX=${SCHEMA_SYNC_WAIT_MAX:-600}
+waited=0
+until mysqladmin ping -h 127.0.0.1 -uroot --silent 2>/dev/null; do
+  if [ "$waited" -ge "$WAIT_MAX" ]; then
+    log "ÉCHEC : MySQL injoignable en TCP après ${WAIT_MAX} s, synchro abandonnée"
+    exit 1
+  fi
+  if [ "$waited" -gt 0 ] && [ $((waited % 30)) -eq 0 ]; then
+    log "attente de MySQL (${waited} s)"
+  fi
+  sleep 1
+  waited=$((waited + 1))
+done
 
 shopt -s nullglob
 scripts=("$INIT_DIR"/*.sql)
