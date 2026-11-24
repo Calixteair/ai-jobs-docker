@@ -1,6 +1,6 @@
 # Exploration du dataset — AI Jobs Market 2025-2026
 
-> Généré par `scripts/explore_dataset.py` à partir de `data/ai_jobs_market_2025_2026.csv`. Ne pas éditer à la main : relancer le script.
+> Généré par `pipeline/explore_dataset.py` à partir de `data/ai_jobs_market_2025_2026.csv`. Ne pas éditer à la main : relancer le script.
 >
 > Sens et rôle de chaque variable : [dictionnaire des données](dictionnaire_donnees.md).
 

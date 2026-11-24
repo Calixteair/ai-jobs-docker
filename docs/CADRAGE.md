@@ -189,8 +189,10 @@ app/
 └── tests/
 database/
 └── scripts_initialisation/   # schéma + import
-scripts/
-└── cleaning.py   # nettoyage CSV reproductible
+pipeline/
+├── cleaning.py          # nettoyage CSV reproductible
+└── explore_dataset.py   # rapport d'exploration du dataset
+scripts/                 # scripts devops exécutés par la CI (smoke, T7)
 ```
 
 Correspondance avec le sujet : T1 build · T2/T3 démarrage/état · T4 web · T5 connexion · T6 filtres · T7 persistance · T8 reconstruction from scratch (manuel + CI sur runner vierge).

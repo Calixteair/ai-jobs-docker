@@ -60,7 +60,7 @@ Exemples : `feat(app): filtres pays et secteur`, `fix(db): healthcheck en TCP`.
 3. Carte en **In review**. Une fois la CI verte, le **bot de review** (`calixteair-reviewer`) relit la PR en quelques minutes avec un modèle de langage et poste sa review :
    - **approuvée** : le bot merge lui-même dans `dev` (commit signé), puis le staging est redéployé ;
    - **changements demandés** : corriger et pousser, le bot relit le nouveau commit ;
-   - **commentaire sans merge** : la PR touche un chemin de `.github/CODEOWNERS` (`Jenkinsfile`, `Makefile`, `deploy/`, `scripts/`, `compose*.yaml`, `.github/`), ou le diff est trop long : review de Calixteair obligatoire.
+   - **commentaire sans merge** : la PR touche un chemin de `.github/CODEOWNERS` (`Jenkinsfile`, `Makefile`, `deploy/`, `scripts/`, `compose*.yaml`, `.github/`), ou le diff est trop long : review de Calixteair obligatoire. Le code data (nettoyage, exploration) va dans `pipeline/`, pas dans `scripts/`, réservé aux scripts lancés par la CI.
 4. Personne ne merge dans `dev` à la main : seul un commit signé par le bot ou par Calixteair part en staging. Une relecture entre membres reste bienvenue (commentaires, questions) avant que le bot passe.
 
 ### CI : Jenkins

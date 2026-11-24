@@ -1,6 +1,6 @@
 # Journal de nettoyage
 
-> Généré par `scripts/cleaning.py` à partir de `data/ai_jobs_market_2025_2026.csv`. Ne pas éditer à la main.
+> Généré par `pipeline/cleaning.py` à partir de `data/ai_jobs_market_2025_2026.csv`. Ne pas éditer à la main.
 >
 > Décisions appliquées : [décisions de nettoyage](decisions_nettoyage.md).
 

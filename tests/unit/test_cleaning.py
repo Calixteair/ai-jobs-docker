@@ -1,4 +1,4 @@
-"""Tests du nettoyage (scripts/cleaning.py, issue #13)."""
+"""Tests du nettoyage (pipeline/cleaning.py, issue #13)."""
 
 from pathlib import Path
 
