@@ -51,6 +51,10 @@ class Settings:
         def env(name: str, default):
             return os.environ.get(name) or default
 
+        max_tokens = int(env("LLM_MAX_TOKENS", cls.max_tokens))
+        if max_tokens < 1:
+            # Refus au démarrage : sinon max_tokens=0 partirait vers les backends à chaque requête
+            raise ValueError(f"LLM_MAX_TOKENS doit être un entier ≥ 1 (reçu : {max_tokens})")
         return cls(
             ollama_url=env("OLLAMA_URL", cls.ollama_url).rstrip("/"),
             ollama_model=env("OLLAMA_MODEL", cls.ollama_model),
@@ -60,7 +64,7 @@ class Settings:
             probe_timeout=float(env("LLM_PROBE_TIMEOUT", cls.probe_timeout)),
             probe_ttl=float(env("LLM_PROBE_TTL", cls.probe_ttl)),
             request_timeout=float(env("LLM_REQUEST_TIMEOUT", cls.request_timeout)),
-            max_tokens=int(env("LLM_MAX_TOKENS", cls.max_tokens)),
+            max_tokens=max_tokens,
         )
 
 

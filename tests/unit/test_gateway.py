@@ -237,3 +237,10 @@ def test_only_whitelisted_fields_are_forwarded():
     backends = FakeBackends()
     chat(make_client(backends), "openrouter", models=["vendor/cher"], provider={"x": 1}, top_p=0.9)
     assert set(sent_body(backends)) == {"messages", "model", "max_tokens", "top_p"}
+
+
+@pytest.mark.parametrize("value", ["0", "-5"])
+def test_invalid_max_tokens_setting_is_refused_at_startup(monkeypatch, value):
+    monkeypatch.setenv("LLM_MAX_TOKENS", value)
+    with pytest.raises(ValueError, match="LLM_MAX_TOKENS"):
+        Settings.from_env()
