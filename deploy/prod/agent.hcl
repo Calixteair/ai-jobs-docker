@@ -39,5 +39,8 @@ MYSQL_USER={{ .Data.data.MYSQL_USER }}
 MYSQL_PASSWORD={{ .Data.data.MYSQL_PASSWORD }}
 MYSQL_ROOT_PASSWORD={{ .Data.data.MYSQL_ROOT_PASSWORD }}
 {{ end }}
+{{ with secret "secret/data/ai-jobs/prod/llm" }}
+OPENROUTER_API_KEY={{ .Data.data.OPENROUTER_API_KEY }}
+{{ end }}
 EOT
 }
