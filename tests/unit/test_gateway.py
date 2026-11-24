@@ -1,6 +1,7 @@
 """Gateway LLM : routage des trois modes, bascule et cache de disponibilité (backends simulés)."""
 
 import asyncio
+import json
 
 import httpx
 import pytest
@@ -77,6 +78,7 @@ def make_client(backends: FakeBackends, key="fake-key-for-tests", clock=None) ->
         openrouter_url=OPENROUTER,
         openrouter_model="vendor/model",
         openrouter_key=key,
+        max_tokens=512,
     )
     app = create_app(settings, transport=httpx.MockTransport(backends), clock=clock or Clock())
     return TestClient(app)
@@ -166,8 +168,13 @@ def test_probe_result_is_cached_until_ttl():
 
 @pytest.mark.parametrize(
     "body",
-    [{"model": "auto"}, {"model": "inconnu", "messages": MESSAGES}],
-    ids=["sans-messages", "mode-inconnu"],
+    [
+        {"model": "auto"},
+        {"model": "inconnu", "messages": MESSAGES},
+        {"messages": MESSAGES, "max_tokens": "beaucoup"},
+        {"messages": MESSAGES, "max_tokens": 0},
+    ],
+    ids=["sans-messages", "mode-inconnu", "max-tokens-texte", "max-tokens-nul"],
 )
 def test_invalid_requests_are_400(body):
     resp = make_client(FakeBackends()).post("/v1/chat/completions", json=body)
@@ -205,3 +212,28 @@ def test_oversized_body_is_413():
     huge = [{"role": "user", "content": "x" * 1_100_000}]
     resp = make_client(FakeBackends()).post("/v1/chat/completions", json={"messages": huge})
     assert resp.status_code == 413
+
+
+def test_non_numeric_content_length_is_400():
+    resp = make_client(FakeBackends()).post(
+        "/v1/chat/completions", content=b"{}", headers={"content-length": "abc"}
+    )
+    assert resp.status_code == 400
+
+
+def sent_body(backends: FakeBackends) -> dict:
+    return json.loads(backends.sent[-1].content)
+
+
+@pytest.mark.parametrize(("asked", "sent"), [(None, 512), (100, 100), (100_000, 512)])
+def test_max_tokens_is_capped(asked, sent):
+    backends = FakeBackends()
+    extra = {} if asked is None else {"max_tokens": asked}
+    chat(make_client(backends), "openrouter", **extra)
+    assert sent_body(backends)["max_tokens"] == sent
+
+
+def test_only_whitelisted_fields_are_forwarded():
+    backends = FakeBackends()
+    chat(make_client(backends), "openrouter", models=["vendor/cher"], provider={"x": 1}, top_p=0.9)
+    assert set(sent_body(backends)) == {"messages", "model", "max_tokens", "top_p"}

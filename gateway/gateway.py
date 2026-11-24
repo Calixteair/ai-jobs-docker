@@ -5,6 +5,9 @@ L'app envoie une requête au format OpenAI (POST /v1/chat/completions) avec le m
   ollama     → Ollama uniquement (indisponible = 503, aucun traitement)
   openrouter → OpenRouter directement
 Le vrai modèle est fixé par backend (OLLAMA_MODEL, OPENROUTER_MODEL) : l'app ne choisit que le mode.
+Seuls les champs de génération courants sont relayés (liste blanche) et max_tokens est plafonné :
+l'app ne peut ni choisir un autre modèle OpenRouter (« models », « provider »), ni faire
+exploser le coût.
 La réponse du backend (streaming compris) est relayée telle quelle, avec l'en-tête X-LLM-Backend.
 """
 
@@ -25,6 +28,8 @@ from starlette.background import BackgroundTask
 MODES = ("auto", "ollama", "openrouter")
 # Largement assez pour une conversation : au-delà, 413 plutôt que tout charger en mémoire
 MAX_BODY_BYTES = 1_000_000
+# Champs relayés au backend ; « model » est remplacé par le vrai modèle, le reste est ignoré
+FORWARDED_FIELDS = ("messages", "stream", "temperature", "top_p", "max_tokens", "stop")
 log = logging.getLogger("gateway")
 
 
@@ -38,6 +43,8 @@ class Settings:
     probe_timeout: float = 1.5
     probe_ttl: float = 30.0
     request_timeout: float = 120.0
+    # Plafond de tokens générés par réponse, appliqué aussi quand l'app n'en demande pas
+    max_tokens: int = 1024
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -53,6 +60,7 @@ class Settings:
             probe_timeout=float(env("LLM_PROBE_TIMEOUT", cls.probe_timeout)),
             probe_ttl=float(env("LLM_PROBE_TTL", cls.probe_ttl)),
             request_timeout=float(env("LLM_REQUEST_TIMEOUT", cls.request_timeout)),
+            max_tokens=int(env("LLM_MAX_TOKENS", cls.max_tokens)),
         )
 
 
@@ -167,8 +175,50 @@ class Router:
             return None
 
 
+class BadRequest(Exception):
+    """Requête refusée avant tout appel à un backend : status + message lisible par l'app."""
+
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
+
+
 def error(status: int, message: str) -> JSONResponse:
     return JSONResponse({"error": {"message": message}}, status_code=status)
+
+
+async def read_body(request: Request) -> bytes:
+    """Corps brut, refusé dès qu'il dépasse MAX_BODY_BYTES (annoncé ou réel)."""
+    try:
+        announced = int(request.headers.get("content-length") or 0)
+    except ValueError:
+        raise BadRequest(400, "en-tête content-length invalide") from None
+    if announced > MAX_BODY_BYTES:
+        raise BadRequest(413, "requête trop volumineuse")
+    raw = b""
+    async for chunk in request.stream():
+        raw += chunk
+        if len(raw) > MAX_BODY_BYTES:
+            raise BadRequest(413, "requête trop volumineuse")
+    return raw
+
+
+def parse_chat(raw: bytes, max_tokens: int) -> tuple[str, dict]:
+    """Mode demandé et corps à relayer (FORWARDED_FIELDS seulement, max_tokens plafonné)."""
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        raise BadRequest(400, "corps JSON invalide") from None
+    if not isinstance(body, dict) or not isinstance(body.get("messages"), list):
+        raise BadRequest(400, "« messages » (liste) est obligatoire")
+    mode = body.get("model") or "auto"
+    if mode not in MODES:
+        raise BadRequest(400, f"mode inconnu « {mode} » : {', '.join(MODES)}")
+    asked = body.get("max_tokens", max_tokens)
+    if isinstance(asked, bool) or not isinstance(asked, int) or asked < 1:
+        raise BadRequest(400, "« max_tokens » doit être un entier positif")
+    forwarded = {k: body[k] for k in FORWARDED_FIELDS if k in body}
+    return mode, {**forwarded, "max_tokens": min(asked, max_tokens)}
 
 
 def relay(resp: httpx.Response, backend: str) -> StreamingResponse:
@@ -218,22 +268,10 @@ def create_app(
 
     @app.post("/v1/chat/completions")
     async def chat(request: Request):
-        if int(request.headers.get("content-length") or 0) > MAX_BODY_BYTES:
-            return error(413, "requête trop volumineuse")
-        raw = b""
-        async for chunk in request.stream():
-            raw += chunk
-            if len(raw) > MAX_BODY_BYTES:
-                return error(413, "requête trop volumineuse")
         try:
-            body = json.loads(raw)
-        except ValueError:
-            return error(400, "corps JSON invalide")
-        if not isinstance(body, dict) or not isinstance(body.get("messages"), list):
-            return error(400, "« messages » (liste) est obligatoire")
-        mode = body.get("model") or "auto"
-        if mode not in MODES:
-            return error(400, f"mode inconnu « {mode} » : {', '.join(MODES)}")
+            mode, body = parse_chat(await read_body(request), s.max_tokens)
+        except BadRequest as exc:
+            return error(exc.status, str(exc))
         try:
             chosen = await router.plan(mode)
         except NoBackend as exc:
