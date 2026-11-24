@@ -55,9 +55,16 @@ Chaque commit publié a aussi ses images `:<préfixe>-sha-<commit>`. Le `compose
 
 ### 3.2 Réinitialisation des données
 
-Les scripts d'init MySQL ne s'exécutent que si le volume est vide. Si le schéma ou l'import changent :
-- **staging** : `docker compose down -v && up -d` (données réimportables, pas de risque).
-- **prod** : idem, mais seulement lors d'une release planifiée (les données viennent du CSV, aucune donnée utilisateur à perdre).
+MySQL n'exécute `/docker-entrypoint-initdb.d` que si le volume est vide. Pour qu'un volume déjà créé suive le schéma et l'import, l'image `db` rejoue ces scripts au démarrage quand ils ont changé (`database/bin/schema-sync.sh`) :
+- empreinte (sha256 des noms et contenus des `*.sql`) comparée à celle de la table `_schema_sync` ; identique → rien à faire ;
+- différente → tous les scripts rejoués dans l'ordre, puis empreinte enregistrée ;
+- le healthcheck (`db-healthcheck`) n'est vert qu'après cette synchro : l'app attend, et un script en erreur laisse la base `unhealthy`, donc `stack-sync` revient à la version précédente.
+
+Pas de service one-shot : `stack-sync` exige que tous les conteneurs de la stack tournent. Pas d'Alembic : la base est entièrement dérivée du CSV, aucune donnée saisie n'est à migrer.
+
+**Règle pour les scripts d'init** : ils doivent être rejouables sur une base qui contient déjà leurs tables (`DROP TABLE IF EXISTS` puis `CREATE`, insertion complète), et supprimer eux-mêmes une table renommée. Sur un volume neuf ils passent deux fois de suite (init de MySQL puis synchro), sans effet. Pendant la synchro d'un redéploiement, l'app peut voir brièvement des tables vides.
+
+En dernier recours (volume incohérent) : `docker compose down -v && up -d`, sans risque, les données venant du CSV.
 
 ### 3.3 Gateway LLM
 

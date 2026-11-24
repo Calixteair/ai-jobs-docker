@@ -4,9 +4,11 @@ Vérifient le conteneur démarré par `make db-up`, sans dépendre du schéma
 métier : les tests des données (zone data) viendront s'ajouter dans ce dossier.
 """
 
+import hashlib
 import os
 import socket
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -16,6 +18,7 @@ COMPOSE = ["docker", "compose", "-f", "compose.yaml", "-f", "compose.test.yaml"]
 # Surchargés en CI Jenkins, où MySQL tourne dans le démon Docker « docker »
 TEST_HOST = os.environ.get("DB_TEST_HOST", "127.0.0.1")
 TEST_PORT = int(os.environ.get("DB_TEST_PORT", "3307"))
+INIT_DIR = Path(__file__).resolve().parents[2] / "database" / "scripts_initialisation"
 
 
 def in_container(*command: str) -> str:
@@ -69,3 +72,17 @@ def test_app_user_has_no_global_privileges():
 
 def test_default_charset_is_utf8mb4():
     assert mysql("SELECT @@character_set_server") == "utf8mb4"
+
+
+def expected_schema_hash() -> str:
+    """Même calcul que database/bin/schema-sync.sh : nom puis « sha256sum » de chaque *.sql."""
+    listing = "".join(
+        f"{f.name}\n{hashlib.sha256(f.read_bytes()).hexdigest()}  -\n"
+        for f in sorted(INIT_DIR.glob("*.sql"))
+    )
+    return hashlib.sha256(listing.encode()).hexdigest()
+
+
+def test_schema_sync_recorded_current_scripts():
+    # Volume existant (staging, prod) : les scripts d'init y sont rejoués quand ils changent
+    assert mysql("SELECT hash FROM _schema_sync WHERE id = 1") == expected_schema_hash()

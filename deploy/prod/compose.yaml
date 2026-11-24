@@ -20,7 +20,8 @@ services:
     networks:
       - internal
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u $$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+      # Ping TCP + synchro du schéma terminée (database/bin/healthcheck.sh)
+      test: ["CMD", "db-healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 20

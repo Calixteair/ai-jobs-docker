@@ -83,6 +83,10 @@ Relire une PR, c'est : comprendre le changement, lancer les commandes de test, v
 - Documentation à jour si le comportement change.
 - Preuve dans `rapport/preuves/` si la tâche sert un test T1–T8 du sujet.
 
+## Scripts de la base
+
+Les `*.sql` de `database/scripts_initialisation/` sont rejoués au démarrage de la base dès qu'ils changent, y compris sur le staging et la prod déjà créés ([VPS_SETUP §3.2](docs/VPS_SETUP.md#32-réinitialisation-des-données)). Ils doivent donc être **rejouables** : `DROP TABLE IF EXISTS` puis `CREATE`, insertion complète, et suppression d'une table renommée.
+
 ## Secrets
 
 Jamais de mot de passe, token ou clé dans le dépôt (il est public) : uniquement dans `.env`, qui est ignoré par Git. La CI (Jenkins) lance `gitleaks` sur tout l'historique.
