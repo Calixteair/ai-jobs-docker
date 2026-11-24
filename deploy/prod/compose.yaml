@@ -1,7 +1,8 @@
 # Compose de la production sur le VPS (ai-jobs.calixteair.fr), installé par stack-sync depuis le
 # tag vX.Y.Z signé : stack-sync remplace :<préfixe>-latest par :vX.Y.Z-<préfixe> (images immuables
 # de Harbor) et vérifie ce fichier contre sa politique (vps-soc-config, stack-sync/policies/ai-jobs.json).
-# Les variables MYSQL_* viennent de /run/ai-jobs/.env, rendu par bao-agent (deploy/prod/agent.hcl).
+# Les variables MYSQL_* et OPENROUTER_API_KEY viennent de /run/ai-jobs/.env, rendu par bao-agent
+# (deploy/prod/agent.hcl).
 name: ai-jobs
 
 services:
@@ -36,21 +37,42 @@ services:
       DB_NAME: ${MYSQL_DATABASE:?err}
       DB_USER: ${MYSQL_USER:?err}
       DB_PASSWORD: ${MYSQL_PASSWORD:?err}
+      # L'app ne parle qu'à la gateway, qui choisit le modèle (modes auto / ollama / openrouter)
+      LLM_GATEWAY_URL: http://gateway:8000
     depends_on:
       db:
         condition: service_healthy
     networks:
       - internal
+      - llm
       # Joint par Nginx Proxy Manager sous le nom ai-jobs-app:8501
       - nginx-reverse-proxy
     mem_limit: 512m
     restart: unless-stopped
     # Aucun port publié : accès uniquement via NPM (WebSockets activés)
 
+  gateway:
+    # Gateway LLM : Ollama du PC par le tailnet s'il est allumé, sinon OpenRouter (clé rendue par
+    # bao-agent, OpenBao secret/ai-jobs/prod/llm). Sans IA, le dashboard fonctionne quand même.
+    image: registry.calixteair.fr/ai-jobs/ai-jobs:gateway-latest
+    container_name: ai-jobs-gateway
+    environment:
+      # PC (thinkpad) sur le tailnet ; Ollama n'y est joignable que depuis le VPS (ACL Headscale)
+      OLLAMA_URL: http://100.64.0.1:11434
+      OLLAMA_MODEL: qwen2.5-coder:7b
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    networks:
+      # Réseau partagé avec l'app seule : ni la base ni NPM ne peuvent consommer la clé OpenRouter
+      - llm
+    mem_limit: 256m
+    restart: unless-stopped
+    # Aucun port publié
+
 volumes:
   mysql_data:
 
 networks:
   internal:
+  llm:
   nginx-reverse-proxy:
     external: true

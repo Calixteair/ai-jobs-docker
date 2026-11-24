@@ -21,6 +21,8 @@ stack-sync ai-jobs vX.Y.Z (root, code fixe dans vps-soc-config) :
   4. sauvegarde, installe, bao-deploy.sh ai-jobs, contrôle de santé, retour arrière si échec
 
 Navigateur ─► NPM (:443, réseau nginx-reverse-proxy) ─► ai-jobs[-staging]-app:8501 ─► ai-jobs[-staging]-db:3306
+                                                         └─► gateway:8000 ─► Ollama du PC (tailnet 100.64.0.1:11434)
+                                                                          └─► sinon OpenRouter (HTTPS)
 ```
 
 | | Staging | Production |
@@ -29,17 +31,18 @@ Navigateur ─► NPM (:443, réseau nginx-reverse-proxy) ─► ai-jobs[-stagin
 | Stack / dossier | `projects/ai-jobs-staging/` | `projects/ai-jobs/` |
 | Fichiers du dépôt | `deploy/staging/` (installés par `stack-sync`, mode commit) | `deploy/prod/` (installés par `stack-sync`) |
 | Utilisateur CI | `ci-ai-jobs-staging` | `ci-ai-jobs` |
-| Images | `:app-sha-<commit>`, `:db-sha-<commit>` (épinglées par `stack-sync`) | `:vX.Y.Z-app`, `:vX.Y.Z-db` (immuables) |
-| Secrets OpenBao | `secret/ai-jobs/staging/mysql` | `secret/ai-jobs/prod/mysql` |
+| Images | `:app-sha-<commit>`, `:db-sha-<commit>`, `:gateway-sha-<commit>` (épinglées par `stack-sync`) | `:vX.Y.Z-app`, `:vX.Y.Z-db`, `:vX.Y.Z-gateway` (immuables) |
+| Secrets OpenBao | `secret/ai-jobs/staging/mysql`, `.../staging/llm` | `secret/ai-jobs/prod/mysql`, `.../prod/llm` |
 | URL | `ai-jobs-staging.calixteair.fr` (basic auth) | `ai-jobs.calixteair.fr` |
 
 Isolation : chaque environnement a ses propres conteneurs, réseau interne, volume MySQL, secrets, clé SSH et utilisateur CI. Une clé CI compromise ne peut redéployer **que** son environnement ; celle de la prod ne peut déployer qu'un tag existant **signé**.
 
 ## 2. Images
 
-Deux images dans le projet Harbor `ai-jobs` (`registry.calixteair.fr/ai-jobs/ai-jobs`), distinguées par un préfixe de tag :
+Trois images dans le projet Harbor `ai-jobs` (`registry.calixteair.fr/ai-jobs/ai-jobs`), distinguées par un préfixe de tag :
 - `app-*` : Streamlit (`Dockerfile`) ;
-- `db-*` : `FROM mysql:8.4` + scripts d'initialisation (`database/Dockerfile`). `bao-deploy.sh` ne copie aucun fichier : les scripts d'init voyagent dans l'image.
+- `db-*` : `FROM mysql:8.4` + scripts d'initialisation (`database/Dockerfile`). `bao-deploy.sh` ne copie aucun fichier : les scripts d'init voyagent dans l'image ;
+- `gateway-*` : gateway LLM (`gateway/Dockerfile`).
 
 Chaque commit publié a aussi ses images `:<préfixe>-sha-<commit>`. Le `compose.yaml` du correcteur garde `build:` : il ne dépend pas du VPS.
 
@@ -55,6 +58,13 @@ Chaque commit publié a aussi ses images `:<préfixe>-sha-<commit>`. Le `compose
 Les scripts d'init MySQL ne s'exécutent que si le volume est vide. Si le schéma ou l'import changent :
 - **staging** : `docker compose down -v && up -d` (données réimportables, pas de risque).
 - **prod** : idem, mais seulement lors d'une release planifiée (les données viennent du CSV, aucune donnée utilisateur à perdre).
+
+### 3.3 Gateway LLM
+
+- Pas de conteneur Ollama sur le VPS : la gateway appelle l'Ollama du PC par le tailnet (`OLLAMA_URL=http://100.64.0.1:11434`, modèle `qwen2.5-coder:7b`). PC éteint → OpenRouter en mode `auto`, 503 en mode `ollama`.
+- Côté PC, Ollama n'écoute que sur `127.0.0.1` et est exposé au tailnet par `tailscale serve --tcp 11434`. Les ACL Headscale n'ouvrent au VPS que le port 11434 du PC.
+- Clé OpenRouter : `secret/ai-jobs/<env>/llm`, champ `OPENROUTER_API_KEY`, rendue dans `.env` par bao-agent (policies `ai-jobs-<env>-read`, déjà sur `<env>/*`).
+- Réseau `llm` partagé avec l'app seule : ni la base ni les conteneurs du réseau NPM ne joignent la gateway. La gateway ne relaie que les champs de génération courants et plafonne `max_tokens` (`LLM_MAX_TOKENS`, 1024 par défaut) : la clé ne peut servir ni à un autre modèle ni à des réponses sans limite.
 
 ## 4. Mise en place de la production (une fois, par Calixteair)
 
