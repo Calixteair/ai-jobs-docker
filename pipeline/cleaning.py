@@ -12,7 +12,7 @@ Le script est idempotent : le relancer sur le même CSV produit exactement les
 mêmes fichiers. Il s'arrête avec une erreur explicite si le CSV présente une
 anomalie qu'il ne sait pas traiter (garde-fous C4 et K4).
 
-Usage : python scripts/cleaning.py [chemin_csv] [dossier_sortie] [chemin_journal]
+Usage : python pipeline/cleaning.py [chemin_csv] [dossier_sortie] [chemin_journal]
 """
 
 import sys
@@ -326,7 +326,7 @@ def render_journal(journal: Journal, tables: dict[str, pd.DataFrame], source: st
     lines = [
         "# Journal de nettoyage",
         "",
-        f"> Généré par `scripts/cleaning.py` à partir de `{source}`. Ne pas éditer à la main.",
+        f"> Généré par `pipeline/cleaning.py` à partir de `{source}`. Ne pas éditer à la main.",
         ">",
         "> Décisions appliquées : [décisions de nettoyage](decisions_nettoyage.md).",
         "",

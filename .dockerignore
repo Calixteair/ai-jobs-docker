@@ -29,4 +29,5 @@ compose*.yaml
 report-integration.xml
 requirements-dev.txt
 pyproject.toml
+pipeline
 scripts

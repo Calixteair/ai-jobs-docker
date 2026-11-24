@@ -1,4 +1,4 @@
-"""Tests du script d'exploration du dataset (scripts/explore_dataset.py)."""
+"""Tests du script d'exploration du dataset (pipeline/explore_dataset.py)."""
 
 from pathlib import Path
 

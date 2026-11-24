@@ -2,7 +2,7 @@
 
 Source : `data/ai_jobs_market_2025_2026.csv` — **1 500 lignes × 25 colonnes**, une ligne = une offre d'emploi.
 
-Les chiffres détaillés (types, manquants, doublons, plages) sont produits par `scripts/explore_dataset.py`. Ce document décrit le **sens** et le **rôle** de chaque variable dans le projet.
+Les chiffres détaillés (types, manquants, doublons, plages) sont produits par `pipeline/explore_dataset.py`. Ce document décrit le **sens** et le **rôle** de chaque variable dans le projet.
 
 ## Rôles
 

@@ -8,7 +8,7 @@ Le rapport est entièrement régénéré à chaque exécution : ne pas l'éditer
 Le sens de chaque variable est décrit dans docs/data/dictionnaire_donnees.md et
 les décisions qui en découlent dans docs/data/decisions_nettoyage.md.
 
-Usage : python scripts/explore_dataset.py [chemin_csv] [chemin_rapport]
+Usage : python pipeline/explore_dataset.py [chemin_csv] [chemin_rapport]
 """
 
 import csv
@@ -542,7 +542,7 @@ def build_report(source: Path) -> str:
         [
             "# Exploration du dataset — AI Jobs Market 2025-2026",
             "",
-            f"> Généré par `scripts/explore_dataset.py` à partir de `{display_path(source)}`. "
+            f"> Généré par `pipeline/explore_dataset.py` à partir de `{display_path(source)}`. "
             "Ne pas éditer à la main : relancer le script.",
             ">",
             "> Sens et rôle de chaque variable : [dictionnaire des données]"

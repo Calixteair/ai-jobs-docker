@@ -45,7 +45,7 @@ Objectif : un MySQL conteneurisé contenant des données propres.
 |---|---|---|---|
 | Exploration du dataset : dimensions, types, manquants, doublons `job_id` | Phase 1 | data | Data |
 | Analyse de `required_skills` (format, doublons intra-ligne, normalisation) | Phase 1 | data | Data |
-| `scripts/cleaning.py` reproductible + tests unitaires | Phase 1 | data / test | Data |
+| `pipeline/cleaning.py` reproductible + tests unitaires | Phase 1 | data / test | Data |
 | Schéma logique + justification MySQL (2 avantages, 1 limite) | Phase 2 | data / docs | Data |
 | Script SQL de création (tables, PK/FK, index) | Phase 2 | data | Data |
 | Script d'import (CSV nettoyé → `jobs`, `skills`, `job_skills`) | Phase 2/4 | data | Data |

@@ -2,6 +2,8 @@
 # (GHCR, clés de déploiement staging et prod) : une PR qui les modifie demande la review de
 # Calixteair (ruleset « review de code owner » sur dev et main). Le bot de review ne merge jamais une PR
 # qui touche ces chemins (il lit ce fichier sur dev) ; .github/ couvre aussi REVIEW.md, ses consignes.
+# scripts/ = scripts lancés par le Makefile en CI (smoke, T7). Le code data (pipeline/) n'y va pas :
+# comme app/ et tests/, il n'est qu'importé par pytest, le bot peut donc merger ses PR.
 /Jenkinsfile          @Calixteair
 /Makefile             @Calixteair
 /deploy/              @Calixteair
